@@ -1,23 +1,36 @@
-
----@class Config
----@field opt string Your config option
-local config = {
-  opt = "Hello!",
-}
-
----@class MyModule
 local M = {}
 
----@type Config
-M.config = config
+local user_mapping = require("split.api").user_mapping
 
----@param args Config?
-M.setup = function(args)
-  M.config = vim.tbl_deep_extend(
-        "force",
-        M.config,
-        args or {}
-    )
+function M.setup(config)
+    local cfg = require("split.config"):set(config or {}):get()
+
+    if cfg.keymaps then
+        -- local api = require("split.api")
+        -- local vvar = vim.api.nvim_get_vvar
+
+        for keymap, opts in pairs(cfg.keymaps) do
+            if opts.operator_pending then
+                vim.keymap.set(
+                    { "n", "x" }, keymap,
+                    function()
+                        vim.opt.operatorfunc = (
+                            "v:lua.require'split.api'.user_mapping'%s'"
+                        ):format(keymap)
+                        return "g@"
+                    end,
+                    { expr = true, desc = "Split text on " .. opts.pattern }
+                )
+            else
+                vim.keymap.set(
+                    "n", keymap, user_mapping(keymap),
+                    { desc = "Split text on " .. opts.pattern }
+                )
+            end
+        end
+
+    end
+
 end
 
 return M
