@@ -1,6 +1,11 @@
 local M = {}
 
-local user_mapping = require("split.api").user_mapping
+function M.user_mapping(x)
+    local opts = require("split.config"):get().keymaps[x]
+    return function(type)
+        require("split.splitters").split(type, opts)
+    end
+end
 
 function M.setup(config)
     local cfg = require("split.config"):set(config or {}):get()
@@ -14,16 +19,14 @@ function M.setup(config)
                 vim.keymap.set(
                     { "n", "x" }, keymap,
                     function()
-                        vim.opt.operatorfunc = (
-                            "v:lua.require'split.api'.user_mapping'%s'"
-                        ):format(keymap)
+                        vim.opt.operatorfunc = ("v:lua.require'split.init'.user_mapping'%s'"):format(keymap)
                         return "g@"
                     end,
                     { expr = true, desc = "Split text on " .. opts.pattern }
                 )
             else
                 vim.keymap.set(
-                    "n", keymap, user_mapping(keymap),
+                    "n", keymap, M.user_mapping(keymap),
                     { desc = "Split text on " .. opts.pattern }
                 )
             end

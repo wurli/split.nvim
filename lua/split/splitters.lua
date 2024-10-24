@@ -1,17 +1,13 @@
 local utils         = require("split.utils")
-local config        = require("split.config"):get()
 local interactivity = require("split.interactivity")
 local comment       = require("split.comment")
 
 local M = {}
 
-function M.split_prompt(type, opts)
-
-    M.split_current_line(type, opts)
-end
-
 function M.split(type, opts)
     type           = type or "current_line"
+    -- 'block' selections not implemented (yet) so fall back to "line"
+    type           = type == "block" and "line" or type
     opts           = utils.tbl_copy(opts)
     local linewise = type == "current_line" or type == "line"
 
@@ -68,23 +64,30 @@ function M.split(type, opts)
     -- First need to make sure the first line contains the whole text. This 
     -- is (usually) how we determine whether or not the line is a comment
     lines[1] = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
-    local lines_commented = M.comment_lines(lines_recombined, lines, range[1])
+    local lines_commented, first_line_is_comment = M.comment_lines(lines_recombined, lines, range[1])
 
     -------------------------
     -- Insert the new text --
     -------------------------
-    utils.set_range_text(range, vim.iter(lines_commented):flatten(1):totable(), linewise)
+    local lines_flat = vim.iter(lines_commented):flatten(1):totable()
+    utils.set_range_text(range, lines_flat, linewise)
 
     -----------------------
     -- Apply indentation --
     -----------------------
-    -- vim.api.nvim_cmd({ cmd = 'normal', args = { "`[=`]" }, mods = { silent = true }  }, {})
+    if not first_line_is_comment then
+        vim.api.nvim_cmd({ cmd = 'normal', args = { "g'[=g']" }, mods = { silent = true }  }, {})
+    end
 end
 
 function M.comment_lines(new_lines, original_lines, first_lnum)
+    local first_line_is_comment = false
+
     for lnum, lines in ipairs(new_lines) do
         local comment_parts      = comment.get_comment_parts({ first_lnum + lnum - 1 , 0 })
         local indent, is_comment = comment.get_lines_info(original_lines[lnum], comment_parts)
+
+        if lnum == 1 then first_line_is_comment = is_comment end
 
         if is_comment then
             local make_comment = comment.make_comment_function(comment_parts, "")
@@ -100,7 +103,7 @@ function M.comment_lines(new_lines, original_lines, first_lnum)
         end
     end
 
-    return new_lines
+    return new_lines, first_line_is_comment
 end
 
 

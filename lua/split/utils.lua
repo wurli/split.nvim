@@ -101,9 +101,15 @@ function M.set_range_text(range, lines, linewise)
         vim.api.nvim_buf_set_text(0, range[1], range[2], range[3], range[4], lines)
     end
 
-    -- FIXME: set column properly
-    vim.api.nvim_buf_set_mark(0, "[", range[1] + 1,          range[2], {})
-    vim.api.nvim_buf_set_mark(0, "]", range[3] + #lines + 1, 0, {})
+    -- Need to adjust the positions for the new marks based on how many new
+    -- lines have been inserted. Unfortuntely, because we run `=` later to 
+    -- reindent the code, it's highly impractical to work out where the final
+    -- column should be, so we just set it to 0.
+    range[1] = range[1] + (lines[1] == "" and 2 or 1)
+    range[3] = range[1] + #lines - 1 - (lines[#lines] == "" and 2 or 0)
+
+    vim.api.nvim_buf_set_mark(0, "[", range[1], 0, {})
+    vim.api.nvim_buf_set_mark(0, "]", range[3], 0, {})
 end
 
 function M.tbl_concat(...)
