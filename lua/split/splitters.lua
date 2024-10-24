@@ -11,10 +11,9 @@ function M.split_prompt(type, opts)
 end
 
 function M.split(type, opts)
-    type = type or "current_line"
+    type           = type or "current_line"
+    opts           = utils.tbl_copy(opts)
     local linewise = type == "current_line" or type == "line"
-    print(type)
-    opts = utils.tbl_copy(opts)
 
     if opts.interactive then
         opts = interactivity.get_opts_interactive(opts)
@@ -26,27 +25,26 @@ function M.split(type, opts)
     ---------------------------
     -- Get the text to split --
     ---------------------------
-    local range, text
+    local range, lines
     if type == "current_line" then
         local row = vim.api.nvim_win_get_cursor(0)[1] - 1
         range = { row, 0, row, -1 }
-        text = { vim.api.nvim_get_current_line() }
+        lines = { vim.api.nvim_get_current_line() }
     else
         range = utils.get_marks_range("[", "]")
-        text = utils.get_range_text(range, linewise)
+        lines = utils.get_range_text(range, linewise)
     end
-
 
     -----------------------
     -- Perform the split --
     -----------------------
-    local text_split = M.split_text(text, opts.pattern)
+    local lines_split = M.split_lines(lines, opts.pattern)
 
     -----------------------------------------------
     -- Apply any transformations to split pieces --
     -----------------------------------------------
-    local text_transformed = M.transform(
-        text_split,
+    local parts_transformed = M.transform(
+        lines_split,
         opts.transform_segments,
         opts.transform_separators
     )
@@ -54,14 +52,14 @@ function M.split(type, opts)
     ----------------------------
     -- Recombine split pieces --
     ----------------------------
-    local text_recombined = M.recombine(text_transformed, opts.break_placement)
+    local lines_recombined = M.recombine(parts_transformed, opts.break_placement)
 
     ------------------------------------------------------------
     -- Insert leading/trailing lines if split is not linewise --
     ------------------------------------------------------------
     if not linewise then
-        table.insert(text_recombined[1], 1, "")
-        table.insert(text_recombined[#text_recombined], "")
+        table.insert(lines_recombined[1], 1, "")
+        table.insert(lines_recombined[#lines_recombined], "")
     end
 
     -----------------------------------
@@ -69,13 +67,13 @@ function M.split(type, opts)
     -----------------------------------
     -- First need to make sure the first line contains the whole text. This 
     -- is (usually) how we determine whether or not the line is a comment
-    text[1] = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
-    local text_commented = M.comment_lines(text_recombined, text, range[1])
+    lines[1] = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
+    local lines_commented = M.comment_lines(lines_recombined, lines, range[1])
 
     -------------------------
     -- Insert the new text --
     -------------------------
-    utils.set_range_text(range, vim.iter(text_commented):flatten(1):totable(), linewise)
+    utils.set_range_text(range, vim.iter(lines_commented):flatten(1):totable(), linewise)
 
     -----------------------
     -- Apply indentation --
@@ -161,7 +159,7 @@ function M.transform(text_split, transform_segments, transform_separators)
     )
 end
 
-function M.split_text(lines, pattern)
+function M.split_lines(lines, pattern)
 
     pattern = pattern or ",%s*"
 
