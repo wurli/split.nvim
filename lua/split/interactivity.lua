@@ -132,7 +132,7 @@ end
 function M.user_input_char(prompt, expected)
     local placeholder    = { "_", "Question" }
     local escape_keycode = "\27"
-    local echo           = function(x) print(vim.inspect(x)) vim.api.nvim_echo(x, false, {}) end
+    local echo           = function(x) vim.api.nvim_echo(x, false, {}) end
     local invalid        = function(k)
         local template   = string.find(k, "^[%a%d%p%s]$") and ' (Invalid key "%s") ' or ""
         return { template:format(k) }
@@ -158,7 +158,5 @@ function M.user_input_char(prompt, expected)
 
     return expected[char]
 end
-
--- print(vim.inspect(require("split.utils").user_input_char("Split Text: ", {x = "something"})))
 
 return M

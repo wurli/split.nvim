@@ -10,23 +10,56 @@ function M.match(x, list)
     return -1
 end
 
----@param x table A table containing tables to merge
+-- Range a is smaller than range b if a starts on an earlier row,
+-- OR if it a starts on the same row, but an earlier column
+function M.position_less_than(a, b)
+    return (a[1] < b[1]) or (a[1] == b[1] and a[2] < b[2])
+end
+
+function M.position_less_than_equal_to(a, b)
+    return (a[1] < b[1]) or (a[1] == b[1] and a[2] <= b[2])
+end
+
+function M.position_within(x, left, right, boundary_ok)
+    boundary_ok = boundary_ok or { true, true }
+    boundary_ok = type(boundary_ok) == "table" and boundary_ok or { boundary_ok, boundary_ok }
+
+    local check_left = boundary_ok[1] and M.position_less_than or M.position_less_than_equal_to
+    local check_right = boundary_ok[2] and M.position_less_than or M.position_less_than_equal_to
+
+    return check_left(left, x) and check_right(x, right)
+end
+
+---@param x table A table containing tables to merge, e.g.:
+--- ``` lua
+--- {
+---     { {rx1, cx1}, {rx2, cx2} }, -- first range
+---     { {ry1, cy1}, {ry2, cy2} }, -- second range
+---     { {rz1, cz1}, {rz2, cz2} }, -- third range
+--- }
+--- ```
 ---@return table result The input table with any overlapping ranges merged
 function M.merge_ranges(x)
-    table.sort(x, function(a, b) return a[1] < b[1] end)
 
-    local out = { x[1] }
+    -- Sort ranges based on opening delimiter position
+    table.sort(x, function(a, b) return M.position_less_than(a[1], b[1]) end)
+
+    local merged = { x[1] }
     table.remove(x, 1)
 
-    for _, e in pairs(x) do
-        if e[1] <= out[#out][2] then
-            out[#out][2] = math.max(e[2], out[#out][2])
+    for _, rng in pairs(x) do
+        local prev = merged[#merged]
+        -- If the start of the current range falls within the bounds of the previous
+        -- one, then perform the merge by simply widening the previous range
+        -- if the current one has a greater ending position.
+        if M.position_less_than_equal_to(rng[1], prev[2]) then
+            merged[#merged][2] = M.position_less_than_equal_to(rng[2], prev[2]) and prev[2] or rng[2]
         else
-            table.insert(out, e)
+            table.insert(merged, rng)
         end
     end
 
-    return out
+    return merged
 end
 
 function M.gfind(x, pattern, plain)
@@ -54,10 +87,9 @@ end
 
 function M.get_range_text(range, linewise)
     range = range or M.get_marks_range()
-    local text = linewise
+    return linewise
         and vim.api.nvim_buf_get_lines(0, range[1], range[3] + 1, true)
         or vim.api.nvim_buf_get_text(0, range[1], range[2], range[3], range[4], {})
-    return table.concat(text, "\n")
 end
 
 function M.set_range_text(range, lines, linewise)

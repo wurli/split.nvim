@@ -82,11 +82,11 @@ function M.make_comment_check(parts)
 end
 
 --- Compute comment-related information about lines
----@param lines string[]
+---@param line string
 ---@param parts vim._comment.Parts
 ---@return string indent
 ---@return boolean is_commented
-function M.get_lines_info(lines, parts)
+function M.get_lines_info(line, parts)
     local comment_check = M.make_comment_check(parts)
 
     local is_commented = true
@@ -94,23 +94,21 @@ function M.get_lines_info(lines, parts)
     ---@type string
     local indent
 
-    for _, l in ipairs(lines) do
-        -- Update lines indent: minimum of all indents except blank lines
-        local _, indent_width_cur, indent_cur = l:find('^(%s*)')
+    -- Update lines indent: minimum of all indents except blank lines
+    local _, indent_width_cur, indent_cur = line:find('^(%s*)')
 
-        -- Ignore blank lines completely when making a decision
-        if indent_width_cur < l:len() then
-            -- NOTE: Copying actual indent instead of recreating it with `indent_width`
-            -- allows to handle both tabs and spaces
-            if indent_width_cur < indent_width then
-                ---@diagnostic disable-next-line:cast-local-type
-                indent_width, indent = indent_width_cur, indent_cur
-            end
+    -- Ignore blank lines completely when making a decision
+    if indent_width_cur < line:len() then
+        -- NOTE: Copying actual indent instead of recreating it with `indent_width`
+        -- allows to handle both tabs and spaces
+        if indent_width_cur < indent_width then
+            ---@diagnostic disable-next-line:cast-local-type
+            indent_width, indent = indent_width_cur, indent_cur
+        end
 
-            -- Update comment info: commented if every non-blank line is commented
-            if is_commented then
-                is_commented = comment_check(l)
-            end
+        -- Update comment info: commented if every non-blank line is commented
+        if is_commented then
+            is_commented = comment_check(line)
         end
     end
 
@@ -149,7 +147,5 @@ function M.make_uncomment_function(parts)
         return indent .. new_line .. trail
     end
 end
-
--- print(vim.inspect(require("split.comment").get_commentstring({vim.fn.line("."), vim.fn.col(".")})))
 
 return M
