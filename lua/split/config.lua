@@ -11,12 +11,11 @@ local Config = {
             pattern = ",",
             break_placement = "after_separator",
             operator_pending = false,
-            hook_pre_split = nil,
-            hook_post_split = nil,
+            -- hook_pre_split = nil,
+            -- hook_post_split = nil,
             transform_separators = vim.fn.trim,
             transform_segments = vim.fn.trim,
             indenter = require("split.indent").equalprg,
-            apply_indentation = "code",
             interactive = false
         },
         pattern_aliases = {

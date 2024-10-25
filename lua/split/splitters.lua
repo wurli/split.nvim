@@ -64,7 +64,7 @@ function M.split(type, opts)
     -- First need to make sure the first line contains the whole text. This 
     -- is (usually) how we determine whether or not the line is a comment
     lines[1] = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
-    local lines_commented, first_line_is_comment = M.comment_lines(lines_recombined, lines, range[1])
+    local lines_commented = M.comment_lines(lines_recombined, lines, range[1])
 
     -------------------------
     -- Insert the new text --
@@ -80,23 +80,15 @@ function M.split(type, opts)
         return
     end
 
-    local should_reindent = opts.apply_indentation == "everything" or
-        (opts.apply_indentation == "code" and not first_line_is_comment) or
-        (opts.apply_indentation == "comments" and first_line_is_comment)
-
-    if should_reindent then
+    if opts.indenter then
         opts.indenter("[", "]")
     end
 end
 
 function M.comment_lines(new_lines, original_lines, first_lnum)
-    local first_line_is_comment = false
-
     for lnum, lines in ipairs(new_lines) do
-        local comment_parts      = comment.get_comment_parts({ first_lnum + lnum - 1 , 0 })
+        local comment_parts      = comment.get_comment_parts({ first_lnum + lnum, 0 })
         local indent, is_comment = comment.get_lines_info(original_lines[lnum], comment_parts)
-
-        if lnum == 1 then first_line_is_comment = is_comment end
 
         if is_comment then
             local make_comment = comment.make_comment_function(comment_parts, "")
@@ -112,37 +104,29 @@ function M.comment_lines(new_lines, original_lines, first_lnum)
         end
     end
 
-    return new_lines, first_line_is_comment
+    return new_lines
 end
 
 
-function M.recombine(text_split, retain_separator)
+function M.recombine(text_split, break_placement)
     local out = {}
 
     for _, line_parts in pairs(text_split) do
-        local lines = { "" }
+        local lines = { }
 
-        for _, parts in pairs(line_parts) do
+        for lnum, parts in pairs(line_parts) do
             local segment = parts[1]
             local separator = parts[2]
 
-            lines[#lines] = lines[#lines] .. segment
+            lines[lnum] = (lines[lnum] or "") .. segment
 
-            if retain_separator == "after_separator" then
-                lines[#lines] = lines[#lines] .. separator
-                table.insert(lines, "")
+            if break_placement == "after_separator" then
+                lines[lnum] = (lines[lnum] or "") .. separator
 
-            elseif retain_separator == "before_separator" then
-                table.insert(lines, separator)
-
-            elseif retain_separator == "on_separator" then
-                table.insert(lines, "")
-
+            elseif break_placement == "before_separator" then
+                lines[lnum + 1] = separator
             end
         end
-
-        if lines[1]      == "" then table.remove(lines, 1)      end
-        if lines[#lines] == "" then table.remove(lines, #lines) end
 
         table.insert(out, lines)
     end
