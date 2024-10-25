@@ -72,11 +72,20 @@ function M.split(type, opts)
     local lines_flat = vim.iter(lines_commented):flatten(1):totable()
     utils.set_range_text(range, lines_flat, linewise)
 
+
     -----------------------
     -- Apply indentation --
     -----------------------
-    if not first_line_is_comment then
-        vim.api.nvim_cmd({ cmd = 'normal', args = { "g'[=g']" }, mods = { silent = true }  }, {})
+    if opts.indenter == nil then
+        return
+    end
+
+    local should_reindent = opts.apply_indentation == "everything" or
+        (opts.apply_indentation == "code" and not first_line_is_comment) or
+        (opts.apply_indentation == "comments" and first_line_is_comment)
+
+    if should_reindent then
+        opts.indenter("[", "]")
     end
 end
 
