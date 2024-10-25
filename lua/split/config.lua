@@ -11,19 +11,22 @@ local Config = {
             pattern = ",",
             break_placement = "after_separator",
             operator_pending = false,
-            -- hook_pre_split = nil,
-            -- hook_post_split = nil,
             transform_separators = vim.fn.trim,
             transform_segments = vim.fn.trim,
             indenter = require("split.indent").equalprg,
-            interactive = false
+            split_comments = "smart",
+            unsplitter = nil,
+            interactive = false,
         },
         pattern_aliases = {
             [","] = ",",
             [" "] = "%s+",
             [";"] = ";",
             ["+"] = " [+-/%] ",
-            ["."] = "[%.?!]%s+",
+            ["."] = {
+                pattern = "[%.?!]%s+",
+                unsplitter = " "
+            }
         }
     },
 }

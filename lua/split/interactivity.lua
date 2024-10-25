@@ -27,9 +27,13 @@ function M.get_opts_interactive(opts)
     }
     local cycle_break_placement = function(x) return break_placement_opts[x] end
 
+    local opts_overrides = {}
+
     while true do
         if selection == "cycle_break_placement" then
-            opts.break_placement = cycle_break_placement(opts.break_placement)
+            opts_overrides.break_placement = cycle_break_placement(
+                opts_overrides.break_placement or opts.break_placement
+            )
             prompt_parts[2] = {
                 { " ", "Normal" },
                 { "[", "TabLine" },
@@ -39,21 +43,29 @@ function M.get_opts_interactive(opts)
             selection = M.user_input_char(flatten(prompt_parts), key_options)
 
         elseif selection == "custom_pattern" then
-            opts.pattern = M.user_input_text("Enter split pattern: ")
+            opts_overrides.pattern = M.user_input_text("Enter split pattern: ")
             break
 
-        else
-            opts.pattern = selection
+        elseif type(selection) == "string" then
+            opts_overrides.pattern = selection
+            break
+
+        elseif type(selection) == "table" then
+            for k, v in pairs(selection) do
+                opts[k] = v
+            end
             break
         end
+
     end
 
     if not selection then
         return nil
     end
 
+    local out_opts = vim.tbl_deep_extend("force", opts, opts_overrides)
 
-    return opts
+    return out_opts
 end
 
 M.namespace = {

@@ -31,6 +31,10 @@ function M.split(type, opts)
         lines = utils.get_range_text(range, linewise)
     end
 
+    if opts.unsplitter then
+        lines = { table.concat(lines, opts.unsplitter) }
+    end
+
     -----------------------
     -- Perform the split --
     -----------------------
