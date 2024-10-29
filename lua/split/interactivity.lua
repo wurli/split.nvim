@@ -3,6 +3,8 @@ local config = require("split.config"):get()
 
 local M = {}
 
+---@param opts SplitOpts
+---@return SplitOpts | nil
 function M.get_opts_interactive(opts)
     local flatten = function(x) return vim.iter(x):flatten():totable() end
 
@@ -29,7 +31,7 @@ function M.get_opts_interactive(opts)
 
     local opts_overrides = {}
 
-    while true do
+    while selection do
         if selection == "cycle_break_placement" then
             opts_overrides.break_placement = cycle_break_placement(
                 opts_overrides.break_placement or opts.break_placement
@@ -37,7 +39,7 @@ function M.get_opts_interactive(opts)
             prompt_parts[2] = {
                 { " ", "Normal" },
                 { "[", "TabLine" },
-                { opts.break_placement, "Normal" },
+                { opts_overrides.break_placement, "Normal" },
                 { "]", "TabLine" },
             }
             selection = M.user_input_char(flatten(prompt_parts), key_options)

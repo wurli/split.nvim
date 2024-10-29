@@ -7,6 +7,7 @@ function M.user_mapping(x)
     end
 end
 
+---@param config SplitConfig
 function M.setup(config)
     local cfg = require("split.config"):set(config or {}):get()
 

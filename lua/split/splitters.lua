@@ -4,6 +4,8 @@ local comment       = require("split.comment")
 
 local M = {}
 
+---@param type string
+---@param opts SplitOpts | nil
 function M.split(type, opts)
     type           = type or "current_line"
     -- 'block' selections not implemented (yet) so fall back to "line"
@@ -13,9 +15,10 @@ function M.split(type, opts)
 
     if opts.interactive then
         opts = interactivity.get_opts_interactive(opts)
-        if not opts then
-            return nil
-        end
+    end
+
+    if not opts then
+        return nil
     end
 
     ---------------------------
@@ -75,7 +78,6 @@ function M.split(type, opts)
     -------------------------
     local lines_flat = vim.iter(lines_commented):flatten(1):totable()
     utils.set_range_text(range, lines_flat, linewise)
-
 
     -----------------------
     -- Apply indentation --
@@ -236,7 +238,6 @@ function M.split_lines(lines, pattern)
         table.insert(out, segment_sep_pairs)
     end
 
-    -- return vim.iter(out):flatten(1):totable()
     return out
 end
 
