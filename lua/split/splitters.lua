@@ -8,7 +8,7 @@ local M = {}
 ---@param opts SplitOpts | nil
 function M.split(type, opts)
     type           = type or "current_line"
-    -- 'block' selections not implemented (yet) so fall back to "line"
+    -- 'block' selections not implemented (yet), so fall back to "line"
     type           = type == "block" and "line" or type
     opts           = utils.tbl_copy(opts)
     local linewise = type == "current_line" or type == "line"
@@ -41,7 +41,7 @@ function M.split(type, opts)
     -----------------------
     -- Perform the split --
     -----------------------
-    local lines_split = M.split_lines(lines, opts.pattern)
+    local lines_split = M.split_lines(lines, opts.pattern, range[1])
 
     -----------------------------------------------
     -- Apply any transformations to split pieces --
@@ -161,9 +161,10 @@ function M.transform(text_split, transform_segments, transform_separators)
     )
 end
 
-function M.split_lines(lines, pattern)
+function M.split_lines(lines, pattern, start_line)
 
-    pattern = pattern or ",%s*"
+    pattern    = pattern or ",%s*"
+    start_line = start_line or 1
 
     local sep_positions = vim.tbl_map(
         function(line) return utils.gfind(line, pattern, false) end,
@@ -178,27 +179,54 @@ function M.split_lines(lines, pattern)
 
     local unsplittable_chunks = M.get_unsplittable_runs(lines)
 
-    local should_split = function(split_pos)
+    local is_in_braces = function(split_pos)
         for _, chunk in pairs(unsplittable_chunks) do
-            if utils.position_within(split_pos[1], chunk[1], chunk[2]) then return false end
-            if utils.position_within(split_pos[2], chunk[1], chunk[2]) then return false end
+            -- Check if either the start or end of the separator falls within 
+            -- a pair of brackets (or quotes)
+            if utils.position_within(split_pos[1], chunk[1], chunk[2]) then return true end
+            if utils.position_within(split_pos[2], chunk[1], chunk[2]) then return true end
         end
-        return true
+        return false
+    end
+
+    local is_commented = function(split_pos)
+        return comment.ts_is_comment(0, start_line + split_pos[1][1], split_pos[1][2]) or
+            comment.ts_is_comment(0, start_line + split_pos[2][1], split_pos[2][2])
     end
 
     -- Ignore any separators which fall within brackets, quotes, etc
+    -- Output like this:
+    -- {
+    --      -- Column start/end positions for separators on line 1, and whether
+    --      -- they're commented
+    --      { { 1, 2, true }, { 9, 10, true } },
+    --      -- Column start/end position for separator on line 2, and whether
+    --      -- they're commented
+    --      { { 6, 7, false } },
+    -- }
     sep_positions = vim.iter(sep_positions):
         enumerate():
         map(function(lnum, cnums)
             local out = {}
             for _, cnum_pair in pairs(cnums) do
-                if should_split({ { lnum, cnum_pair[1] }, { lnum, cnum_pair[2] } }) then
-                    table.insert(out, cnum_pair)
+                local pos = { { lnum, cnum_pair[1] }, { lnum, cnum_pair[2] } }
+                if not is_in_braces(pos) then
+                    table.insert(out, { cnum_pair[1], cnum_pair[2], is_commented(pos) })
                 end
             end
             return out
         end):
         totable()
+
+    local all_commented = vim.iter(sep_positions):flatten(1):all(function(x) return x[3] end)
+
+    -- If only some of the separators are commented, then discard them
+    -- (otherwise, i.e. if they're all commented, they should all be kept)
+    if not all_commented then
+        sep_positions = vim.iter(sep_positions):
+            map(function(x) return vim.tbl_filter(function(xi) return not xi[3] end, x) end):
+            totable()
+    end
 
     -- `segments` will be a table of tables. Each subtable will have the
     -- form { a, b, c, d }, where
