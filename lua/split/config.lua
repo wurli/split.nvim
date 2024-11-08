@@ -4,9 +4,9 @@
 ---  Where to place the linebreak in relation to the separator
 ---@field operator_pending? boolean Whether to enter operator-pending mode when
 ---  the mapping is called
----@field transform_separators? function(x: string): string | nil A function to be
+---@field transform_separators? function(x: string, opts: SplitOpts): string | nil A function to be
 ---  applied to each separator before the split text is recombined
----@field transform_segments? function(x: string): string | nil A function to be
+---@field transform_segments? function(x: string, opts: SplitOpts): string | nil A function to be
 ---  applied to each segment before the split text is recombined
 ---@field indenter? function(m1, m2): nil | nil A function to reindent the text
 ---  after it has been split. This will be passed the marks `"["` and `"]"`. 
@@ -17,11 +17,33 @@
 ---  single sentence.
 ---@field interactive? boolean Whether to enter interactive mode when calling
 ---  the mapping. Defaults to `false`.
+---@field quote_characters? { left: string[], right: string[] } Characters used to exclude
+---  separators. E.g. if `quote_characters = { left = { '"', "'" }, right = { '"', "'" } }`,
+---  then separators that fall within single or double quotes will not be used
+---  to insert linebreaks.
+---@field brace_characters? { left: string[], right: string[] } Characters used to exclude
+---  separators. E.g. if `quote_characters = { left = { '(', "[" }, right = { ')', "]" } }`,
+---  then separators that fall within parentheses or brackets will not be used
+---  to insert linebreaks.
 
 ---@class SplitConfig
 ---@field keymaps? table<string, SplitOpts>
 ---@field pattern_aliases? table<string, string | SplitOpts>
 ---@field keymap_defaults? SplitOpts
+
+local default_transformation = function(type, use_leading_space)
+    ---@param s string
+    ---@param opts SplitOpts
+    return function(s, opts)
+        s = vim.trim(s)
+        if type == "separators" and
+            use_leading_space and
+            opts.break_placement == "before_separator" then
+            s = s .. " "
+        end
+        return s
+    end
+end
 
 local Config = {
     state = {},
@@ -44,13 +66,15 @@ local Config = {
             pattern = ",",
             break_placement = "after_separator",
             operator_pending = false,
-            transform_separators = vim.fn.trim,
-            transform_segments = vim.fn.trim,
+            transform_separators = default_transformation("separators", true),
+            transform_segments = default_transformation("segments", false),
             transform_lines = nil,
             indenter = require("split.indent").equalprg,
             split_comments = "smart",
             unsplitter = nil,
             interactive = false,
+            quote_characters = { { "'", '"', "`" }, { "'", '"', "`" } },
+            brace_characters = { { "(", "{", "[" }, { ")", "}", "]" } }
         },
     },
 }

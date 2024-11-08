@@ -41,7 +41,13 @@ function M.split(type, opts)
     -----------------------
     -- Perform the split --
     -----------------------
-    local lines_split = M.split_lines(lines, opts.pattern, range[1])
+    local lines_split = M.split_lines(
+        lines,
+        opts.pattern,
+        opts.quote_characters,
+        opts.brace_characters,
+        range[1]
+    )
 
     -----------------------------------------------
     -- Apply any transformations to split pieces --
@@ -49,7 +55,8 @@ function M.split(type, opts)
     local parts_transformed = M.transform(
         lines_split,
         opts.transform_segments,
-        opts.transform_separators
+        opts.transform_separators,
+        opts
     )
 
     ----------------------------
@@ -140,17 +147,24 @@ function M.recombine(text_split, break_placement)
     return out
 end
 
-function M.transform(text_split, transform_segments, transform_separators)
+--- Apply transformations to segments/separators before recombining
+---
+---@param text_split table<integer, string[]>
+---@param transform_segments fun(segment: string, otps: SplitOpts): string
+---@param transform_separators fun(separator: string, otps: SplitOpts): string
+---@param opts SplitOpts
+---@return table<integer, string[]>
+function M.transform(text_split, transform_segments, transform_separators, opts)
     if transform_segments == nil and transform_separators == nil then
         return text_split
     end
 
     local apply_transformations = function(segment_and_separator)
         if transform_segments ~= nil then
-            segment_and_separator[1] = transform_segments(segment_and_separator[1])
+            segment_and_separator[1] = transform_segments(segment_and_separator[1], opts)
         end
         if transform_separators ~= nil then
-            segment_and_separator[2] = transform_separators(segment_and_separator[2])
+            segment_and_separator[2] = transform_separators(segment_and_separator[2], opts)
         end
         return segment_and_separator
     end
@@ -161,7 +175,7 @@ function M.transform(text_split, transform_segments, transform_separators)
     )
 end
 
-function M.split_lines(lines, pattern, start_line)
+function M.split_lines(lines, pattern, quote_characters, brace_characters, start_line)
 
     pattern    = pattern or ",%s*"
     start_line = start_line or 1
@@ -177,7 +191,7 @@ function M.split_lines(lines, pattern, start_line)
         return vim.tbl_map(function(l) return { { l, "" } } end, lines)
     end
 
-    local unsplittable_chunks = M.get_unsplittable_runs(lines)
+    local unsplittable_chunks = M.get_unsplittable_chunks(lines, quote_characters, brace_characters)
 
     local is_in_braces = function(split_pos)
         for _, chunk in pairs(unsplittable_chunks) do
@@ -269,48 +283,32 @@ function M.split_lines(lines, pattern, start_line)
     return out
 end
 
-function M.get_unsplittable_runs(lines, quote_chars, brace_chars, across_lines)
-    quote_chars = quote_chars or {
-        { "'", '"', "`" },
-        { "'", '"', "`" }
-    }
-    brace_chars = brace_chars or {
-        { "(", "{", "[" },
-        { ")", "}", "]" }
-    }
+function M.get_unsplittable_chunks(lines, quote_chars, brace_chars, across_lines)
+    quote_chars = quote_chars or { { "'", '"', "`" }, { "'", '"', "`" } }
+    brace_chars = brace_chars or { { "(", "{", "[" }, { ")", "}", "]" } }
     local quote_runs = M.get_enclosed_runs(lines, quote_chars[1], quote_chars[2], across_lines)
-    local brace_runs = M.get_enclosed_runs(lines, brace_chars[1], brace_chars[2], across_lines)
-
-    if #quote_runs == 0 then return utils.merge_ranges(brace_runs) end
-    if #brace_runs == 0 then return utils.merge_ranges(quote_runs) end
-
-    local all_runs = {}
-
-    for _, braces in pairs(brace_runs) do
-        for _, quotes in pairs(quote_runs) do
-            local brace_is_within_quotes = false
-            for _, brace_pos in pairs(braces) do
-                if utils.position_within(brace_pos, quotes[1], quotes[2], false) then
-                    brace_is_within_quotes = true
-                    break
-                end
-            end
-            if not brace_is_within_quotes then table.insert(all_runs, braces) end
-        end
-    end
-
-    for _, quotes in pairs(quote_runs) do table.insert(all_runs, quotes) end
-
-    return utils.merge_ranges(all_runs)
+    local brace_runs = M.get_enclosed_runs(lines, brace_chars[1], brace_chars[2], across_lines, quote_runs)
+    return utils.merge_ranges(utils.tbl_concat(quote_runs, brace_runs))
 end
 
 
 ---@param lines table A table of lines 
 ---@param left_braces table Left brace characters
 ---@param right_braces table Right brace characters
+---@param ignore_ranges? table Ranges to ignore when looking for brace characters
 ---@return table table
-function M.get_enclosed_runs(lines, left_braces, right_braces, across_lines)
+function M.get_enclosed_runs(lines, left_braces, right_braces, across_lines, ignore_ranges)
     if across_lines == nil then across_lines = true end
+
+    local is_ignored = function(pos)
+        if not ignore_ranges then return false end
+        for _, r in pairs(ignore_ranges) do
+            if utils.position_within(pos, r[1], r[2]) then
+                return true
+            end
+        end
+        return false
+    end
 
     if not across_lines then
         local out = {}
@@ -326,10 +324,12 @@ function M.get_enclosed_runs(lines, left_braces, right_braces, across_lines)
 
     for lnum, line in pairs(lines) do
         for cnum = 1, #line do
-            local char = line:sub(cnum, cnum)
-            if vim.list_contains(left_braces, char) or vim.list_contains(right_braces, char) then
-                table.insert(braces, char)
-                table.insert(brace_positions, { lnum, cnum })
+            if not is_ignored({ lnum, cnum }) then
+                local char = line:sub(cnum, cnum)
+                if vim.list_contains(left_braces, char) or vim.list_contains(right_braces, char) then
+                    table.insert(braces, char)
+                    table.insert(brace_positions, { lnum, cnum })
+                end
             end
         end
     end
@@ -337,8 +337,7 @@ function M.get_enclosed_runs(lines, left_braces, right_braces, across_lines)
     local brace_pairs = {}
 
     -- Algorithm basically does this after removing everything except braces:
-    -- Step 1: "({}[()])[)]"
-    -- Step 2: "(  [  ])[)]"
+    -- Step 1: "({}[()])[)]" Step 2: "(  [  ])[)]"
     -- Step 2: "(      )[)]"
     -- Step 3: "(      )[)]"
     -- Step 4: "        [)]"
