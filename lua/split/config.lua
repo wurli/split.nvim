@@ -1,35 +1,104 @@
----@class SplitOpts
----@field pattern? string The pattern to split on. Defaults to `","`
----@field break_placement? "after_separator" | "before_separator" | "on_separator"
----  Where to place the linebreak in relation to the separator
----@field operator_pending? boolean Whether to enter operator-pending mode when
----  the mapping is called
----@field transform_separators? function(x: string, opts: SplitOpts): string | nil A function to be
----  applied to each separator before the split text is recombined
----@field transform_segments? function(x: string, opts: SplitOpts): string | nil A function to be
----  applied to each segment before the split text is recombined
----@field indenter? function(m1, m2): nil | nil A function to reindent the text
----  after it has been split. This will be passed the marks `"["` and `"]"`. 
----  Can be `nil` if no indentation is desired. 
----@field unsplitter? string | nil A string that can be used to collapse lines
----  into a single string before splitting. This can be helpful, e.g. if you
----  want to transform multiple lines of text so that each line contains a 
----  single sentence.
----@field interactive? boolean Whether to enter interactive mode when calling
----  the mapping. Defaults to `false`.
----@field quote_characters? { left: string[], right: string[] } Characters used to exclude
----  separators. E.g. if `quote_characters = { left = { '"', "'" }, right = { '"', "'" } }`,
----  then separators that fall within single or double quotes will not be used
----  to insert linebreaks.
----@field brace_characters? { left: string[], right: string[] } Characters used to exclude
----  separators. E.g. if `quote_characters = { left = { '(', "[" }, right = { ')', "]" } }`,
----  then separators that fall within parentheses or brackets will not be used
----  to insert linebreaks.
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---@mod split.config Configuration
+---@tag split.config.defaults
+---@brief [[
+---split.nvim does stuff
+---@brief ]]
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---Plugin configuration
+---@class SplitOpts
+---
+---The lua pattern to split on. Defaults to `","`.
+---@field pattern? string
+---
+---Where to place the linebreak in relation to the
+---separator. By default the linebreak will be inserted
+---after the separator, i.e. split pattern.
+---@field break_placement? BreakPlacement
+---
+---Whether to enter operator-pending mode when the mapping
+---is called
+---@field operator_pending? boolean
+---
+---A function to be applied to each separator before the
+---split text is recombined
+---@field transform_separators? fun(x: string, opts: SplitOpts): string | nil
+---
+---A function to be applied to each segment before the split
+---text is recombined
+---@field transform_segments? fun(x: string, opts: SplitOpts): string | nil
+---
+---A function to reindent the text after it has been split.
+---This will be passed the marks `"["` and `"]"`. Can be
+---`nil` if no indentation is desired. The default is to
+---reindent using `=`, but you can set this to indent using
+---the active LSP's formatter by setting
+---`indenter = require("split.indent").indent_lsp`
+---@field indenter? fun(m1: string, m2: string)
+---
+---A string that can be used to collapse lines into a single
+---string before splitting. This can be helpful, e.g. if you
+---want to transform multiple lines of text so that each
+---line contains a single sentence.
+---@field unsplitter? string | nil
+---
+---Whether to enter interactive mode when calling the
+---mapping. Defaults to `false`.
+---@field interactive? boolean
+---
+---Characters used to delimit quoted regions, within which
+---no linebreaks will be inserted. By default, recognised
+---quote characters are ", ', and `.
+---@field brace_characters? { left: string[], right: string[] }
+---
+---Characters used to delimit embraced regions, within which
+---no linebreaks will be inserted. By default, recognised
+---brace pairs are `[]`, `()`, and `{}`.
+---@field quote_characters? { left: string[], right: string[] }
+
+---Options for break placement
+---@alias BreakPlacement
+---| '"after_separator"' # Place the linbreak before the split pattern
+---| '"before_separator"' # Place the linebreak after the split pattern
+---| '"on_separator"' # Replace the split pattern with a linebreak
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@class SplitConfig
+---A table of keymappings. Table keys should give a keymapping to set, table
+---values should be a subset of |split.config.SplitOpts|.
 ---@field keymaps? table<string, SplitOpts>
+---A table of aliases to use in interactive mode. Table keys give the alias,
+---which should be a single character, and table values give the pattern to use
+---when that character is entered by the user. Alternatively you can specify a
+---table of |split.config.SplitOpts| to further customise the behaviour of each
+---alias. The default aliases are:
+---* `","`: Split on commas.
+---* `";"`: Split on semicolons.
+---* `" "`: Split on one or more whitespace characters.
+---* `"+"`: Split on `+`, `-`, `/`, and `%`, provided these are surrounded by
+---one or more whitespace characters.
+---* `"."`: Split by sentence.
 ---@field pattern_aliases? table<string, string | SplitOpts>
+---These are the settings which will be used unless the keymap in question
+---specifies otherwise.
 ---@field keymap_defaults? SplitOpts
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---@class SplitConfigComplete
+---@field keymaps table<string, SplitOpts>
+---@field pattern_aliases table<string, string | SplitOpts>
+---@field keymap_defaults SplitOpts
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 
 local default_transformation = function(type, use_leading_space)
     ---@param s string
@@ -47,7 +116,7 @@ end
 
 local Config = {
     state = {},
-    ---@type SplitConfig
+    ---@type SplitConfigComplete
     config = {
         keymaps = {
             ["gs"]  = { operator_pending = true, pattern = "," },
@@ -57,10 +126,16 @@ local Config = {
         },
         pattern_aliases = {
             [","] = ",",
-            [" "] = "%s+",
             [";"] = ";",
+            [" "] = "%s+",
             ["+"] = " [+-/%] ",
-            ["."] = { pattern = "[%.?!]%s+", unsplitter = " " }
+            ["<"] = "  ",
+            ["."] = {
+                pattern = "[%.?!]%s+",
+                unsplitter = " ",
+                quote_characters = {},
+                brace_characters = {}
+            }
         },
         keymap_defaults = {
             pattern = ",",
@@ -69,16 +144,16 @@ local Config = {
             transform_separators = default_transformation("separators", true),
             transform_segments = default_transformation("segments", false),
             transform_lines = nil,
-            indenter = require("split.indent").equalprg,
-            split_comments = "smart",
+            indenter = require("split.indent").indent_equalprg,
             unsplitter = nil,
             interactive = false,
-            quote_characters = { { "'", '"', "`" }, { "'", '"', "`" } },
-            brace_characters = { { "(", "{", "[" }, { ")", "}", "]" } }
+            quote_characters = { left = { "'", '"', "`" }, right = { "'", '"', "`" } },
+            brace_characters = { left = { "(", "{", "[" }, right = { ")", "}", "]" } }
         },
     },
 }
 
+---@package
 ---@param cfg SplitConfig
 function Config:set(cfg)
     if cfg then
@@ -96,11 +171,12 @@ function Config:set(cfg)
     return self
 end
 
----@return SplitConfig
+---@return SplitConfigComplete
 function Config:get()
     return self.config
 end
 
+---@export Config
 return setmetatable(Config, {
     __index = function(this, k)
         return this.state[k]

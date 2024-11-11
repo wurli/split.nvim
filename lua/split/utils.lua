@@ -62,7 +62,21 @@ function M.merge_ranges(x)
     return merged
 end
 
+---@param x string The string to split
+---@param pattern string | table Either a pattern to split on or a table of
+---  patterns to split on
+---@param plain? boolean Whether to 
 function M.gfind(x, pattern, plain)
+    if type(pattern) == "table" then
+        local out = {}
+        for p in pattern do
+            for _, pos in pairs(M.gfind(x, p, plain)) do
+                out.insert(pos)
+            end
+        end
+        return out
+    end
+
     if plain == nil then plain = false end
 
     local out = {}
@@ -70,7 +84,7 @@ function M.gfind(x, pattern, plain)
     local init = 1
 
     while true do
-        local start, stop = string.find(x, pattern, init, plain)
+        local start, stop = x:find(pattern, init, plain)
         if start == nil then break end
         table.insert(out, { start, stop })
         init = stop + 1

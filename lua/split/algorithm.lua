@@ -4,8 +4,19 @@ local comment       = require("split.comment")
 
 local M = {}
 
----@param type string
----@param opts SplitOpts | nil
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---@alias SplitType
+---| '"current_line"' # split.nvim is being called for the line the cursor is on
+---| '"line"' # split.nvim is being called in operator-pending 'line' mode
+---| '"block"' # Currently just an alias for `"line"`
+---| '"char"' # split.nvim is being called in operator-pending 'char' mode
+
+---Split text by a pattern
+---
+---@param type SplitType | nil 
+---The mode in which the function is called.
+---@param opts SplitOpts | nil 
+---Additional options; see |split.config.SplitOpts| for more information.
 function M.split(type, opts)
     type           = type or "current_line"
     -- 'block' selections not implemented (yet), so fall back to "line"
@@ -18,7 +29,7 @@ function M.split(type, opts)
     end
 
     if not opts then
-        return nil
+        return
     end
 
     ---------------------------
@@ -34,15 +45,17 @@ function M.split(type, opts)
         lines = utils.get_range_text(range, linewise)
     end
 
-    if opts.unsplitter then
-        lines = { table.concat(lines, opts.unsplitter) }
-    end
+
+    --------------------------------------------------------------------------
+    -- Uncomment any commented lines, and make functions to re-comment them --
+    --------------------------------------------------------------------------
+    local lines_uncommented, commented, commenters = M.uncomment_lines(lines, range)
 
     -----------------------
     -- Perform the split --
     -----------------------
     local lines_split = M.split_lines(
-        lines,
+        lines_uncommented,
         opts.pattern,
         opts.quote_characters,
         opts.brace_characters,
@@ -64,115 +77,75 @@ function M.split(type, opts)
     ----------------------------
     local lines_recombined = M.recombine(parts_transformed, opts.break_placement)
 
-    ------------------------------------------------------------
-    -- Insert leading/trailing lines if split is not linewise --
-    ------------------------------------------------------------
+    ---------------------------------------------------------
+    -- 'Unsplit' each chunk of commented/uncommented lines --
+    ---------------------------------------------------------
+    if opts.unsplitter then
+        lines_recombined, commenters = M.unsplit_lines(
+            lines_recombined, commented, commenters, opts
+        )
+    end
+
+    ---------------------------------------------------------
+    -- Insert trailing blank line if split is not linewise --
+    ---------------------------------------------------------
     if not linewise then
-        table.insert(lines_recombined[1], 1, "")
         table.insert(lines_recombined[#lines_recombined], "")
     end
 
     -----------------------------------
     -- Apply commenting to new lines --
     -----------------------------------
-    -- First need to make sure the first line contains the whole text. This 
-    -- is (usually) how we determine whether or not the line is a comment
-    lines[1] = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
-    local lines_commented = M.comment_lines(lines_recombined, lines, range[1])
+    for lnum, commenter in ipairs(commenters) do
+        lines_recombined[lnum] = vim.tbl_map(commenter, lines_recombined[lnum])
+    end
 
-    -------------------------
-    -- Insert the new text --
-    -------------------------
-    local lines_flat = vim.iter(lines_commented):flatten(1):totable()
+    --------------------------------------------------------
+    -- Insert leading blank line if split is not linewise --
+    --------------------------------------------------------
+    if not linewise then
+        table.insert(lines_recombined, 1, { "" })
+    end
+
+    ---------------------------------------
+    -- Insert the new text in the buffer --
+    ---------------------------------------
+    local lines_flat = vim.iter(lines_recombined):flatten(1):totable()
     utils.set_range_text(range, lines_flat, linewise)
 
     -----------------------
     -- Apply indentation --
     -----------------------
-    if opts.indenter == nil then
-        return
-    end
-
     if opts.indenter then
         opts.indenter("[", "]")
     end
 end
 
-function M.comment_lines(new_lines, original_lines, first_lnum)
-    for lnum, lines in ipairs(new_lines) do
-        local comment_parts      = comment.get_comment_parts({ first_lnum + lnum, 0 })
-        local indent, is_comment = comment.get_lines_info(original_lines[lnum], comment_parts)
-
-        if is_comment then
-            local make_comment = comment.make_comment_function(comment_parts, "")
-            for i, line in ipairs(lines) do
-                if i == 1 then
-                    if line ~= "" then
-                        lines[i] = indent .. line
-                    end
-                else
-                    lines[i] = indent .. make_comment(line)
-                end
-            end
-        end
-    end
-
-    return new_lines
-end
-
-
-function M.recombine(text_split, break_placement)
-    local out = {}
-
-    for _, line_parts in pairs(text_split) do
-        local lines = { }
-
-        for lnum, parts in pairs(line_parts) do
-            local segment = parts[1]
-            local separator = parts[2]
-
-            lines[lnum] = (lines[lnum] or "") .. segment
-
-            if break_placement == "after_separator" then
-                lines[lnum] = (lines[lnum] or "") .. separator
-
-            elseif break_placement == "before_separator" then
-                lines[lnum + 1] = separator
-            end
+function M.uncomment_lines(lines, range)
+    local commented = {}
+    local commenters = {}
+    for lnum, line in ipairs(lines) do
+        if lnum == 1 then
+            -- Need to make sure the first line contains the whole text as this
+            -- is (usually) how we determine whether or not the line is a comment
+            line = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
         end
 
-        table.insert(out, lines)
-    end
+        local comment_parts = comment.get_comment_parts({ lnum + range[1], 0 }, line)
+        local _, line_is_commented = comment.get_line_info(line, comment_parts)
+        local commenter = function(x) return x end
 
-    return out
-end
-
---- Apply transformations to segments/separators before recombining
----
----@param text_split table<integer, string[]>
----@param transform_segments fun(segment: string, otps: SplitOpts): string
----@param transform_separators fun(separator: string, otps: SplitOpts): string
----@param opts SplitOpts
----@return table<integer, string[]>
-function M.transform(text_split, transform_segments, transform_separators, opts)
-    if transform_segments == nil and transform_separators == nil then
-        return text_split
-    end
-
-    local apply_transformations = function(segment_and_separator)
-        if transform_segments ~= nil then
-            segment_and_separator[1] = transform_segments(segment_and_separator[1], opts)
+        if line_is_commented then
+            local uncommenter = comment.make_uncomment_function(comment_parts)
+            commenter = comment.make_comment_function(comment_parts, "")
+            lines[lnum] = uncommenter(lines[lnum])
         end
-        if transform_separators ~= nil then
-            segment_and_separator[2] = transform_separators(segment_and_separator[2], opts)
-        end
-        return segment_and_separator
+
+        table.insert(commented, line_is_commented)
+        table.insert(commenters, commenter)
     end
 
-    return vim.tbl_map(
-        function(line_parts) return vim.tbl_map(apply_transformations, line_parts) end,
-        text_split
-    )
+    return lines, commented, commenters
 end
 
 function M.split_lines(lines, pattern, quote_characters, brace_characters, start_line)
@@ -181,7 +154,7 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
     start_line = start_line or 1
 
     local sep_positions = vim.tbl_map(
-        function(line) return utils.gfind(line, pattern, false) end,
+        function(line) return utils.gfind(line, pattern) end,
         lines
     )
 
@@ -191,7 +164,7 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
         return vim.tbl_map(function(l) return { { l, "" } } end, lines)
     end
 
-    local unsplittable_chunks = M.get_unsplittable_chunks(lines, quote_characters, brace_characters)
+    local unsplittable_chunks = M.get_ignored_chunks(lines, quote_characters, brace_characters)
 
     local is_in_braces = function(split_pos)
         for _, chunk in pairs(unsplittable_chunks) do
@@ -204,6 +177,13 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
     end
 
     local is_commented = function(split_pos)
+
+        -- local abs_pos_start = { start_line + split_pos[1][1], split_pos[1][2] }
+        -- local abs_pos_end = { start_line + split_pos[2][1], split_pos[2][2] }
+        -- print(vim.inspect({ abs_pos_start, abs_pos_end }))
+        -- print(vim.inspect(comment.ts_is_comment(0, unpack(abs_pos_start))))
+        -- print(vim.inspect(comment.ts_is_comment(0, unpack(abs_pos_end))))
+
         return comment.ts_is_comment(0, start_line + split_pos[1][1], split_pos[1][2]) or
             comment.ts_is_comment(0, start_line + split_pos[2][1], split_pos[2][2])
     end
@@ -242,6 +222,7 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
             totable()
     end
 
+
     -- `segments` will be a table of tables. Each subtable will have the
     -- form { a, b, c, d }, where
     -- a: The start position of a run of characters in `text` which does not
@@ -271,8 +252,8 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
             local sep_start     = m[3] or (segment_stop + 1)
             local sep_stop      = m[4] or (segment_stop + 1)
 
-            local segment = string.sub(line, segment_start, segment_stop)
-            local sep     = string.sub(line, sep_start,     sep_stop)
+            local segment = line:sub(segment_start, segment_stop)
+            local sep     = line:sub(sep_start,     sep_stop)
 
             table.insert(segment_sep_pairs, { segment, sep })
         end
@@ -283,12 +264,136 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
     return out
 end
 
-function M.get_unsplittable_chunks(lines, quote_chars, brace_chars, across_lines)
-    quote_chars = quote_chars or { { "'", '"', "`" }, { "'", '"', "`" } }
-    brace_chars = brace_chars or { { "(", "{", "[" }, { ")", "}", "]" } }
-    local quote_runs = M.get_enclosed_runs(lines, quote_chars[1], quote_chars[2], across_lines)
-    local brace_runs = M.get_enclosed_runs(lines, brace_chars[1], brace_chars[2], across_lines, quote_runs)
-    return utils.merge_ranges(utils.tbl_concat(quote_runs, brace_runs))
+--- Apply transformations to segments/separators before recombining
+---
+---@param text_split table<integer, string[]>
+---@param transform_segments fun(segment: string, otps: SplitOpts): string
+---@param transform_separators fun(separator: string, otps: SplitOpts): string
+---@param opts SplitOpts
+---@return table<integer, string[]>
+function M.transform(text_split, transform_segments, transform_separators, opts)
+    if transform_segments == nil and transform_separators == nil then
+        return text_split
+    end
+
+    local check = function(s)
+        if type(s) ~= "string" then
+            error(("Transformer should return a string, not a %s. Actual value returned: `%s`"):format(
+                type(s),
+                vim.inspect(s)
+            ))
+        end
+        return s
+    end
+
+    local transform = function(segment_and_separator)
+        if transform_segments ~= nil then
+            segment_and_separator[1] = check(transform_segments(segment_and_separator[1], opts))
+        end
+        if transform_separators ~= nil then
+            segment_and_separator[2] = check(transform_separators(segment_and_separator[2], opts))
+        end
+        return segment_and_separator
+    end
+
+    return vim.tbl_map(
+        function(line_parts) return vim.tbl_map(transform, line_parts) end,
+        text_split
+    )
+end
+
+
+
+
+function M.recombine(text_split, break_placement)
+    local out = {}
+
+    for _, line_parts in pairs(text_split) do
+        local lines = { }
+
+        for lnum, parts in pairs(line_parts) do
+            local segment = parts[1]
+            local separator = parts[2]
+
+            lines[lnum] = (lines[lnum] or "") .. segment
+
+            if break_placement == "after_separator" then
+                lines[lnum] = (lines[lnum] or "") .. separator
+
+            elseif break_placement == "before_separator" then
+                lines[lnum + 1] = separator
+            end
+        end
+
+        table.insert(out, lines)
+    end
+
+    return out
+end
+
+function M.unsplit_lines(lines_recombined, commented, commenters, opts)
+    local lines_unsplit = { { } }
+    local commenters_unsplit = { commenters[1] }
+
+    -- Collapse each chunk of commented/uncommented lines into single lines.
+    local prev_line_commented = commented[1]
+    for lnum, line_parts in ipairs(lines_recombined) do
+        local curr_line_commented = commented[lnum]
+        if prev_line_commented == curr_line_commented then
+            local line = lines_unsplit[#lines_unsplit]
+            if #line == 0 then
+                table.insert(line, line_parts[1])
+            else
+                local unsplit_line = line[#line] .. opts.unsplitter .. line_parts[1]
+                if string.match(unsplit_line, opts.pattern) then
+                    table.insert(line, line_parts[1])
+                else
+                    line[#line] = unsplit_line
+                end
+            end
+            for i = 2, #line_parts do table.insert(line, line_parts[i]) end
+        else
+            table.insert(lines_unsplit, line_parts)
+            table.insert(commenters_unsplit, commenters[lnum])
+        end
+        prev_line_commented = curr_line_commented
+    end
+
+    return lines_unsplit, commenters_unsplit
+end
+
+---@param lines string[]
+---@param quote_chars  table
+---@param brace_chars  table
+---@return table
+function M.get_ignored_chunks(lines, quote_chars, brace_chars)
+    local quotes_ok = quote_chars.left and quote_chars.right
+    local braces_ok = brace_chars.left and brace_chars.right
+
+    if not quotes_ok and not braces_ok then
+        return {}
+    end
+
+    local quote_runs, brace_runs
+
+    if not quotes_ok then
+        quote_runs = M.get_enclosed_chunks(
+            lines,
+            quote_chars.left,
+            quote_chars.right
+        )
+    end
+
+    if not braces_ok then
+        brace_runs = M.get_enclosed_chunks(
+            lines,
+            brace_chars.left,
+            brace_chars.right,
+            quote_runs
+        )
+    end
+
+    return utils.merge_ranges(utils.tbl_concat(quote_runs or {}, brace_runs or {}))
 end
 
 
@@ -297,8 +402,7 @@ end
 ---@param right_braces table Right brace characters
 ---@param ignore_ranges? table Ranges to ignore when looking for brace characters
 ---@return table table
-function M.get_enclosed_runs(lines, left_braces, right_braces, across_lines, ignore_ranges)
-    if across_lines == nil then across_lines = true end
+function M.get_enclosed_chunks(lines, left_braces, right_braces, ignore_ranges)
 
     local is_ignored = function(pos)
         if not ignore_ranges then return false end
@@ -308,15 +412,6 @@ function M.get_enclosed_runs(lines, left_braces, right_braces, across_lines, ign
             end
         end
         return false
-    end
-
-    if not across_lines then
-        local out = {}
-        for lnum, line in ipairs(lines) do
-            local runs = M.get_enclosed_runs({ [lnum] = line }, left_braces, right_braces, true)
-            for _, r in pairs(runs) do table.insert(out, r) end
-        end
-        return out
     end
 
     local braces = {}
@@ -334,14 +429,15 @@ function M.get_enclosed_runs(lines, left_braces, right_braces, across_lines, ign
         end
     end
 
-    local brace_pairs = {}
-
     -- Algorithm basically does this after removing everything except braces:
     -- Step 1: "({}[()])[)]" Step 2: "(  [  ])[)]"
     -- Step 2: "(      )[)]"
     -- Step 3: "(      )[)]"
     -- Step 4: "        [)]"
     --           ^^^^^^-- Returns this whole chunk of 'enclosed' text
+    -- NB, Lua supports something like this using patterns like "%b()", but
+    -- this doesn't take account of mixed brace types.
+    local brace_pairs = {}
     while true do
         if #braces < 2 then break end
 

@@ -3,9 +3,13 @@ local config = require("split.config"):get()
 
 local M = {}
 
----@param opts SplitOpts
+---Prompt the user for split options
+---
+---@param opts? SplitOpts
 ---@return SplitOpts | nil
 function M.get_opts_interactive(opts)
+    opts = opts or config.keymap_defaults
+
     local flatten = function(x) return vim.iter(x):flatten():totable() end
 
     local key_options = vim.tbl_extend("force", config.pattern_aliases, {
@@ -27,7 +31,10 @@ function M.get_opts_interactive(opts)
         before_separator = "on_separator",
         on_separator     = "after_separator",
     }
-    local cycle_break_placement = function(x) return break_placement_opts[x] end
+
+    local cycle_break_placement = function(x)
+        return break_placement_opts[x]
+    end
 
     local opts_overrides = {}
 
@@ -146,9 +153,13 @@ end
 function M.user_input_char(prompt, expected)
     local placeholder    = { "_", "Question" }
     local escape_keycode = "\27"
-    local echo           = function(x) vim.api.nvim_echo(x, false, {}) end
-    local invalid        = function(k)
-        local template   = string.find(k, "^[%a%d%p%s]$") and ' (Invalid key "%s") ' or ""
+
+    local echo = function(x)
+        vim.api.nvim_echo(x, false, {})
+    end
+
+    local invalid = function(k)
+        local template = k:find("^[%a%d%p%s]$") and ' (Invalid key "%s") ' or ""
         return { template:format(k) }
     end
 

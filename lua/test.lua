@@ -1,5 +1,5 @@
-    -- this, is, some; text; with, different; separators
-    -- this, is, some; text; with, different; separators
+-- this, is, some; text; with, different; separators
+-- this, is, some; text; with, different; separators
 
     -- print(vim.inspect( { 123, utils.match("hello, there, jacob", " ") }))
 
@@ -10,7 +10,7 @@
 ------------------------------------
 
 local test = {"x, [y,] (y", "z,y), a"}
-print(vim.inspect(require("split.splitters").split_lines(test, ",%s")))
+print(vim.inspect(require( "split.algorithm").split_lines(test, ",%s")))
 -- local out = require("split.splitters").split_text(test, ",")
 -- print(vim.inspect(out))
 

@@ -49,7 +49,9 @@ function M.get_commentstring(ref_position)
     return ts_cs or buf_cs
 end
 
-function M.get_comment_parts(ref_position)
+function M.get_comment_parts(ref_position, line)
+    line = line or vim.api.nvim_buf_get_lines(0, ref_position[1] - 1, ref_position[1], true)[1]
+
     local cs = M.get_commentstring(ref_position)
 
     if cs == nil or cs == '' then
@@ -63,7 +65,10 @@ function M.get_comment_parts(ref_position)
 
     -- Structure of 'commentstring': <left part> <%s> <right part>
     local left, right = cs:match('^(.-)%%s(.-)$')
-    return { left = left, right = right }
+    left, right = vim.trim(left), vim.trim(right)
+    local indent = line:match("^%s*" .. vim.pesc(left) .. "(%s*)")
+
+    return { left = left, indent = indent, right = right }
 end
 
 --- Make a function that checks if a line is commented
@@ -74,7 +79,7 @@ function M.make_comment_check(parts)
 
     -- Commented line has the following structure:
     -- <whitespace> <trimmed left> <anything> <trimmed right> <whitespace>
-    local regex = vim.trim(l_esc) .. '.*' .. vim.trim(r_esc)
+    local regex = "^%s*" .. vim.trim(l_esc) .. '.*' .. vim.trim(r_esc)
 
     return function(line)
         return line:find(regex)
@@ -86,7 +91,7 @@ end
 ---@param parts vim._comment.Parts
 ---@return string indent
 ---@return boolean is_commented
-function M.get_lines_info(line, parts)
+function M.get_line_info(line, parts)
     local comment_check = M.make_comment_check(parts)
 
     local is_commented = true
@@ -118,11 +123,12 @@ end
 
 function M.make_comment_function(parts, indent)
     local prefix          = indent .. parts.left
+    local comment_indent  = parts.indent
     local nonindent_start = indent:len() + 1
     local suffix          = parts.right
 
     return function(line)
-        return prefix .. line:sub(nonindent_start) .. suffix
+        return prefix .. comment_indent .. line:sub(nonindent_start) .. suffix
     end
 end
 
@@ -183,7 +189,7 @@ function M.ts_is_comment(bufnr, row, col)
             end
 
         for _, comment_node in pairs(comment_nodes) do
-            if string.match(n:type(), comment_node) then
+            if n:type():match(comment_node) then
                 return true
             end
         end
