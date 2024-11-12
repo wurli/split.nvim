@@ -1,0 +1,319 @@
+*split-nvim-txt*
+
+                ___       __                                         
+               /\_ \   __/\ \__                    __                
+     ____  ____\//\ \ /\_\ \ ,_\      ___   __  __/\_\    ___ ___    
+    /',__\/\ '__ \ \ \\/\ \ \ \/    /' _  \/\ \/\ \/\ \ /' __  __ \  
+   /\__,  \ \ \L\ \_\ \\ \ \ \ \_ __/\ \/\ \ \ \_/ \ \ \/\ \/\ \/\ \ 
+   \/\____/\ \ ,__/\____\ \_\ \__/\_\ \_\ \_\ \___/ \ \_\ \_\ \_\ \_\
+    \/___/  \ \ \/\/____/\/_/\/__\/_/\/_/\/_/\/__/   \/_/\/_/\/_/\/_/
+             \ \_\                                                   
+              \/_/                                                   
+
+            · Break up long lines at the speed of thought ·
+
+
+==============================================================================
+Table of Contents                                               *split.contents*
+
+Introduction ······················································ |split-nvim|
+Usage ···························································· |split.usage|
+Interactivity ············································ |split.interactivity|
+Configuration ··················································· |split.config|
+Algorithm ···················································· |split.algorithm|
+
+==============================================================================
+Introduction                                                        *split-nvim*
+
+split.nvim is a Neovim plugin for inserting linebreaks when lines of code
+get unweildy. Usually I use it for stuff like this:
+
+>lua
+    -- Initial text:
+    local foo = { 123, "4,5,6", { 7, 8, 9 } }
+
+    -- Text after splitting (I use `gs` to enter operator-pending mode,
+    -- then `iB` to split within the outermost curly braces)
+    local foo = {
+        123,
+        "4,5,6",
+        { 7, 8, 9 }
+    }
+<
+
+                                                                *split.features*
+*  Interactivity: split.nvim supports an interactive mode which allows
+   you to use shortcuts for complex split patterns. For example, you might
+   press `<` in interactive mode to split text by any of `<`, `<=`, `>`,
+   `>=`, and `==`. See |split.interactivity| for more information.
+
+*  Comments: split.nvim is aware of comments and supports tree-sitter.
+   If you try to split a region with both commented and uncommented code,
+   only the uncommented code will be affected.
+
+*  braces/quotes: split.nvim is aware of braces and quotes, and
+   generally will not insert linebreaks in these regions unless you want it
+   to. If you want to break up text within a set of quotes or brackets, use
+   one of vim's built-in text objects, e.g. `gsib` to split within `()`,
+   `gsiB` to split within `{}`, `gsi"` to split within `""`, etc.
+
+*  Indentation: split.nvim will by default reapply indentation after
+   splitting text. By default this is done using the default indenter (see
+   |=|), but this is configurable :)
+
+==============================================================================
+Usage                                                              *split.usage*
+
+To use split.nvim you need to first call `setup()` to create the default
+mappings: `gs` to split by `,` in operator-pending mode, and `gS` to split
+in interactive mode, which allows you to choose from a wider variety of
+split patterns. You can easily change the default behaviour by passing a
+table of options to `setup()`. See |split.config.SplitConfigInput| for
+the full set of configuration options.
+
+M.setup({config?})                                           *split.usage.setup*
+    Configure the behaviour of split.nvim
+
+    Parameters: ~
+        {config?} (SplitConfigInput) User configuration
+
+    See: ~
+        |split.config|
+
+    Usage: ~
+>lua
+        -- Use the default configuration
+        require("split").setup()
+
+        -- The default configuration is equivalent to this:
+        require("split").setup({
+             keymaps = {
+                 ["gs"]  = {
+                     pattern = ",",
+                     operator_pending = true,
+                     interactive = false,
+                 },
+                 ["gss"] = {
+                     pattern = ",",
+                     operator_pending = false,
+                     interactive = false,
+                 },
+                 ["gS"]  = {
+                     pattern = ",",
+                     operator_pending = true,
+                     interactive = true,
+                 },
+                 ["gSS"] = {
+                     pattern = ",",
+                     operator_pending = false,
+                     interactive = true
+                 },
+             },
+        })
+
+        -- Some custom config, in this case a super simple setup that splits 
+        -- on commas or semicolons and doesn't use operator-pending mode.
+        require("split").setup({
+            keymaps = {
+                ["<leader>s"] = {
+                    pattern = "[,;]",
+                    operator_pending = false
+                }
+            }
+        })
+<
+
+
+==============================================================================
+Interactivity                                              *split.interactivity*
+
+When split.nvim is called in interactive mode, the user will be
+prompted to enter options to perform the split. In this mode,
+special keys are used to enter non-standard options:
+
+* <C-x> can be used to enter a non-standard split pattern
+* <CR> can be used to cycle through the options for where
+  linebreaks are placed relative to the split pattern
+* <C-s> can be used to toggle whether the original line
+  breaks should be retained in addition to the new ones.
+
+To execute the split in interactive mode, use one of the alias keys
+set during configuration. E.g. by default you can use `.` to split
+lines by sentence, `;` to split lines by semicolon, etc.
+
+                                           *split.interactivity.default_aliases*
+When using split.nvim in interactive mode, the default pattern aliases
+are as follows:
+* `","`: Split on commas.
+* `";"`: Split on semicolons.
+* `" "`: Split on one or more whitespace characters.
+* `"+"`: Split on `+`, `-`, `/`, and `%`, provided these are
+       surrounded by one or more whitespace characters.
+* `"<"`: Split by `<`, `<=`, `==`, `>`, or `>=`
+* `"."`: Split text so that each sentence occupies a single line.
+
+==============================================================================
+Configuration                                                     *split.config*
+
+SplitOpts                                               *split.config.SplitOpts*
+    Plugin configuration
+
+    Fields: ~
+        {pattern?} (string|string[])
+            The lua pattern to split on. Defaults to `","`.
+        {break_placement?} (BreakPlacement)
+            Where to place the linebreak in relation to the separator. By
+            default the linebreak will be inserted after the separator, i.e.
+            split pattern.
+        {operator_pending?} (boolean)
+            Whether to enter operator-pending mode when the mapping is called
+        {transform_separators?} (fun(x:string,opts:SplitOpts):string)
+            A function to be applied to each separator before the split text is
+            recombined
+        {transform_segments?} (fun(x:string,opts:SplitOpts):string)
+            A function to be applied to each segment before the split text is
+            recombined
+        {indenter?} (fun(m1:string,m2:string))
+            A function to reindent the text after it has been split. This will
+            be passed the marks `"["` and `"]"`. Can be `nil` if no indentation
+            is desired. The default is to reindent using `=`, but you can set
+            this to indent using the active LSP's formatter by setting
+            `indenter = require("split.indent").indent_lsp`
+        {unsplitter?} (string|nil)
+            A string that can be used to collapse lines into a single string
+            before splitting. This can be helpful, e.g. if you want to
+            transform multiple lines of text so that each line contains a
+            single sentence.
+        {interactive?} (boolean)
+            Whether to enter interactive mode when calling the mapping.
+            Defaults to `false`.
+        {brace_characters?} ({left:string[],right:string[]})
+            Characters used to delimit quoted regions, within which no
+            linebreaks will be inserted. By default, recognised quote
+            characters are ", ', and `.
+        {quote_characters?} ({left:string[],right:string[]})
+            Characters used to delimit embraced regions, within which no
+            linebreaks will be inserted. By default, recognised brace pairs are
+            `[]`, `()`, and `{}`.
+
+
+BreakPlacement                                     *split.config.BreakPlacement*
+    Options for break placement
+
+    Variants: ~
+        ("after_separator")   Place the linbreak before the split pattern
+        ("before_separator")  Place the linebreak after the split pattern
+        ("on_separator")      Replace the split pattern with a linebreak
+
+
+SplitConfigInput                                 *split.config.SplitConfigInput*
+
+    Fields: ~
+        {keymaps?} (table<string,SplitOpts>)
+            A table of keymappings. Table keys should give a keymapping to set,
+            table values should be a subset of |split.config.SplitOpts|.
+        {pattern_aliases} (table<string,string|SplitOpts>)
+            A table of aliases to use in interactive mode. Table keys give the
+            alias, which should be a single character, and table values give
+            the pattern to use when that character is entered by the user.
+            Alternatively you can specify a table of |split.config.SplitOpts|
+            to further customise the behaviour of each alias.
+            See |split.interactivity.default_aliases| for the default aliases.
+        {keymap_defaults?} (SplitOpts)
+            Options to use by default when setting keymaps.
+
+
+SplitConfig                                           *split.config.SplitConfig*
+
+    Fields: ~
+        {keymaps} (table<string,SplitOpts>)
+        {pattern_aliases} (table<string,string|SplitOpts>)
+        {keymap_defaults} (SplitOpts)
+
+
+Config:get()                                                  *split.config:get*
+
+    Returns: ~
+        (SplitConfig)
+
+
+==============================================================================
+Algorithm                                                      *split.algorithm*
+
+The algorithm for splitting lines broadly consists of the following
+stages:
+
+1. Each line is split into sub-lines based on the provided
+   pattern(s):
+   - Unless the user specifies otherwise, a split will not occur if
+     the pattern falls within a special range, e.g. a pair of quotes
+     or a pair of brackets.
+   - If some of the lines to be split are comments, none of these
+     lines will be split. If all of the lines are commments, they will
+     be split as usual.
+   - Lines are uncommented so that the comment strings don't appear
+     in the wrong places later.
+2. Line parts are transformed using the given transformation
+   functions. The default transformations involve removing
+   leading/trailing whitespace, and possibly adding some padding to
+   the portions of the line matched by the provided pattern.
+3. The 'separator' and 'segment' portions of the original lines are
+   recombined pairwise to give the new lines.
+4. The newly constructed lines are 'unsplit', in effect replacing
+   the original linebreaks with a string provided by the user. Note
+   that here, linebreaks are only replaced within contiguous chunks
+   of commented/uncommented lines.
+5. Commenting is reapplied to the new lines.
+6. If the user called split.nvim within a line, leading and
+   new lines are added to the results.
+7. The new lines are inserted into the buffer.
+
+SplitType                                            *split.algorithm.SplitType*
+
+    Variants: ~
+        ("current_line")  Call is for the current line
+        ("line")          Call is in operator-pending `"line"` mode
+        ("block")         Currently just an alias for `"line"`
+        ("char")          Call is in operator-pending `"char"` mode
+
+
+SegSepPair                                          *split.algorithm.SegSepPair*
+    When a line is split, the result is an array where each element
+    conforms to this pattern.
+
+    Fields: ~
+        {seg} (string)
+            A portion of the line which wasn't matched by the pattern.
+        {sep?} (string)
+            A portion of the line which was matched by the provided pattern.
+
+
+                                                   *split.algorithm.split_lines*
+M.split_lines({lines}, {pattern}, {quotes}, {braces}, {linenr?}, {bufnr?})
+    Split text by inserting linebreaks
+
+    This is a low-level helper which may be of use to users with a
+    particularly adventurous spirit.
+
+
+    Parameters: ~
+        {lines} (string[]) An array of lines to split
+        {pattern} (string|string[]) Either a single split pattern or an array
+              giving several patterns to split on.
+        {quotes} ({left:string[],right:string[]}) Characters used
+              to delimit quoted regions, within which no text will be split.
+        {braces} ({left:string[],right:string[]}) Characters used
+              to delimit embraced regions, within which no text will be split.
+        {linenr?} (integer) Optionally the start line number, 1-indexed. If
+              supplied, this is used with tree-sitter to detect which of the
+              matches for `pattern` are commented. If not supplied it is assumed
+              that no lines are commented.
+        {bufnr?} (integer) Optionally the buffer the text is taken from;
+              used with tree-sitter to detect which of the matches for `pattern`
+              are commented. Defaults to the current buffer.
+
+    Returns: ~
+        (SegSepPair[][])
+
+
+vim:tw=78:ts=8:noet:ft=help:norl:

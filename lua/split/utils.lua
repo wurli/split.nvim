@@ -69,9 +69,9 @@ end
 function M.gfind(x, pattern, plain)
     if type(pattern) == "table" then
         local out = {}
-        for p in pattern do
+        for _, p in pairs(pattern) do
             for _, pos in pairs(M.gfind(x, p, plain)) do
-                out.insert(pos)
+                table.insert(out, pos)
             end
         end
         return out

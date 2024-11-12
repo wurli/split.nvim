@@ -1,22 +1,57 @@
 local utils         = require("split.utils")
 local interactivity = require("split.interactivity")
 local comment       = require("split.comment")
+--
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---@mod split.algorithm Algorithm
+---@brief [[
+---The algorithm for splitting lines broadly consists of the following
+---stages:
+---
+---1. Each line is split into sub-lines based on the provided
+---   pattern(s):
+---   - Unless the user specifies otherwise, a split will not occur if
+---     the pattern falls within a special range, e.g. a pair of quotes
+---     or a pair of brackets.
+---   - If some of the lines to be split are comments, none of these
+---     lines will be split. If all of the lines are commments, they will
+---     be split as usual.
+---   - Lines are uncommented so that the comment strings don't appear
+---     in the wrong places later.
+---2. Line parts are transformed using the given transformation
+---   functions. The default transformations involve removing
+---   leading/trailing whitespace, and possibly adding some padding to
+---   the portions of the line matched by the provided pattern.
+---3. The 'separator' and 'segment' portions of the original lines are
+---   recombined pairwise to give the new lines.
+---4. The newly constructed lines are 'unsplit', in effect replacing
+---   the original linebreaks with a string provided by the user. Note
+---   that here, linebreaks are only replaced within contiguous chunks
+---   of commented/uncommented lines.
+---5. Commenting is reapplied to the new lines.
+---6. If the user called split.nvim within a line, leading and
+---   new lines are added to the results.
+---7. The new lines are inserted into the buffer.
+---@brief ]]
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 local M = {}
 
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@alias SplitType
----| '"current_line"' # split.nvim is being called for the line the cursor is on
----| '"line"' # split.nvim is being called in operator-pending 'line' mode
+---| '"current_line"' # Call is for the current line
+---| '"line"' # Call is in operator-pending `"line"` mode
 ---| '"block"' # Currently just an alias for `"line"`
----| '"char"' # split.nvim is being called in operator-pending 'char' mode
+---| '"char"' # Call is in operator-pending `"char"` mode
 
+---@private
 ---Split text by a pattern
 ---
 ---@param type SplitType | nil 
 ---The mode in which the function is called.
 ---@param opts SplitOpts | nil 
----Additional options; see |split.config.SplitOpts| for more information.
+---Additional options; see |split.config.SplitOpts| for more
+---information.
 function M.split(type, opts)
     type           = type or "current_line"
     -- 'block' selections not implemented (yet), so fall back to "line"
@@ -121,6 +156,12 @@ function M.split(type, opts)
     end
 end
 
+---@private
+---@param lines string[]
+---@param range integer[]
+---@return string[]
+---@return boolean[]
+---@return function[]
 function M.uncomment_lines(lines, range)
     local commented = {}
     local commenters = {}
@@ -148,10 +189,40 @@ function M.uncomment_lines(lines, range)
     return lines, commented, commenters
 end
 
-function M.split_lines(lines, pattern, quote_characters, brace_characters, start_line)
+---When a line is split, the result is an array where each element
+---conforms to this pattern.
+---@class SegSepPair
+---
+---A portion of the line which wasn't matched by the pattern.
+---@field seg string
+---
+---A portion of the line which was matched by the provided pattern.
+---@field sep? string
 
+---Split text by inserting linebreaks
+---
+---This is a low-level helper which may be of use to users with a
+---particularly adventurous spirit.
+---
+---@param lines string[] An array of lines to split
+---@param pattern string | string[] Either a single split pattern or an array
+---  giving several patterns to split on.
+---@param quotes { left: string[], right: string[] } Characters used
+---  to delimit quoted regions, within which no text will be split.
+---@param braces { left: string[], right: string[] } Characters used
+---  to delimit embraced regions, within which no text will be split.
+---@param linenr? integer Optionally the start line number, 1-indexed. If
+---  supplied, this is used with tree-sitter to detect which of the
+---  matches for `pattern` are commented. If not supplied it is assumed
+---  that no lines are commented.
+---@param bufnr? integer Optionally the buffer the text is taken from;
+---  used with tree-sitter to detect which of the matches for `pattern`
+---  are commented. Defaults to the current buffer.
+---@return SegSepPair[][]
+function M.split_lines(lines, pattern, quotes, braces, linenr, bufnr)
     pattern    = pattern or ",%s*"
-    start_line = start_line or 1
+    linenr = linenr or 1
+    bufnr      = bufnr or 0
 
     local sep_positions = vim.tbl_map(
         function(line) return utils.gfind(line, pattern) end,
@@ -161,10 +232,10 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
     local any_matches = vim.iter(sep_positions):any(function(x) return #x > 0 end)
 
     if not any_matches then
-        return vim.tbl_map(function(l) return { { l, "" } } end, lines)
+        return vim.tbl_map(function(l) return { { seg = l } } end, lines)
     end
 
-    local unsplittable_chunks = M.get_ignored_chunks(lines, quote_characters, brace_characters)
+    local unsplittable_chunks = M.get_ignored_chunks(lines, quotes, braces)
 
     local is_in_braces = function(split_pos)
         for _, chunk in pairs(unsplittable_chunks) do
@@ -177,15 +248,11 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
     end
 
     local is_commented = function(split_pos)
-
-        -- local abs_pos_start = { start_line + split_pos[1][1], split_pos[1][2] }
-        -- local abs_pos_end = { start_line + split_pos[2][1], split_pos[2][2] }
-        -- print(vim.inspect({ abs_pos_start, abs_pos_end }))
-        -- print(vim.inspect(comment.ts_is_comment(0, unpack(abs_pos_start))))
-        -- print(vim.inspect(comment.ts_is_comment(0, unpack(abs_pos_end))))
-
-        return comment.ts_is_comment(0, start_line + split_pos[1][1], split_pos[1][2]) or
-            comment.ts_is_comment(0, start_line + split_pos[2][1], split_pos[2][2])
+        if not linenr then
+            return false
+        end
+        return comment.ts_is_comment(bufnr, linenr + split_pos[1][1], split_pos[1][2]) or
+            comment.ts_is_comment(bufnr, linenr + split_pos[2][1], split_pos[2][2])
     end
 
     -- Ignore any separators which fall within brackets, quotes, etc
@@ -222,7 +289,6 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
             totable()
     end
 
-
     -- `segments` will be a table of tables. Each subtable will have the
     -- form { a, b, c, d }, where
     -- a: The start position of a run of characters in `text` which does not
@@ -247,15 +313,10 @@ function M.split_lines(lines, pattern, quote_characters, brace_characters, start
 
         local segment_sep_pairs = {}
         for _, m in pairs(segments) do
-            local segment_start = m[1]
-            local segment_stop  = m[2]
-            local sep_start     = m[3] or (segment_stop + 1)
-            local sep_stop      = m[4] or (segment_stop + 1)
-
-            local segment = line:sub(segment_start, segment_stop)
-            local sep     = line:sub(sep_start,     sep_stop)
-
-            table.insert(segment_sep_pairs, { segment, sep })
+            table.insert(segment_sep_pairs, {
+                seg = m[1] and m[2] and line:sub(m[1], m[2]),
+                sep = m[3] and m[4] and line:sub(m[3], m[4])
+            })
         end
 
         table.insert(out, segment_sep_pairs)
@@ -266,11 +327,12 @@ end
 
 --- Apply transformations to segments/separators before recombining
 ---
----@param text_split table<integer, string[]>
+---@private
+---@param text_split SegSepPair[][]
 ---@param transform_segments fun(segment: string, otps: SplitOpts): string
 ---@param transform_separators fun(separator: string, otps: SplitOpts): string
 ---@param opts SplitOpts
----@return table<integer, string[]>
+---@return SegSepPair[][]
 function M.transform(text_split, transform_segments, transform_separators, opts)
     if transform_segments == nil and transform_separators == nil then
         return text_split
@@ -286,14 +348,16 @@ function M.transform(text_split, transform_segments, transform_separators, opts)
         return s
     end
 
-    local transform = function(segment_and_separator)
-        if transform_segments ~= nil then
-            segment_and_separator[1] = check(transform_segments(segment_and_separator[1], opts))
+    ---@param segsep SegSepPair
+    ---@return SegSepPair
+    local transform = function(segsep)
+        if transform_segments ~= nil and segsep.seg then
+            segsep.seg = check(transform_segments(segsep.seg, opts))
         end
-        if transform_separators ~= nil then
-            segment_and_separator[2] = check(transform_separators(segment_and_separator[2], opts))
+        if transform_separators ~= nil and segsep.sep then
+            segsep.sep = check(transform_separators(segsep.sep, opts))
         end
-        return segment_and_separator
+        return segsep
     end
 
     return vim.tbl_map(
@@ -305,23 +369,24 @@ end
 
 
 
+---@private
+---@param text_split SegSepPair[][]
+---@param break_placement BreakPlacement
+---@return string[][]
 function M.recombine(text_split, break_placement)
     local out = {}
 
     for _, line_parts in pairs(text_split) do
         local lines = { }
 
-        for lnum, parts in pairs(line_parts) do
-            local segment = parts[1]
-            local separator = parts[2]
-
-            lines[lnum] = (lines[lnum] or "") .. segment
+        for lnum, segsep in pairs(line_parts) do
+            lines[lnum] = (lines[lnum] or "") .. (segsep.seg or "")
 
             if break_placement == "after_separator" then
-                lines[lnum] = (lines[lnum] or "") .. separator
+                lines[lnum] = (lines[lnum] or "") .. (segsep.sep or "")
 
             elseif break_placement == "before_separator" then
-                lines[lnum + 1] = separator
+                lines[lnum + 1] = segsep.sep
             end
         end
 
@@ -331,30 +396,60 @@ function M.recombine(text_split, break_placement)
     return out
 end
 
+---Remove preexisting linebreaks from the result
+---
+---This has to happen at this stage for reasons. Preexisting linebreaks are
+---only removed within contigous chunks of commented or uncommented code.
+---
+---@private
+---@param lines_recombined string[][] Each element corresponds to one
+---  of the original lines. Each sub-element corresponds to one of the new
+---  lines.
+---@param commented boolean[] Whether any of `lines_recombined` were originally
+---  commented
+---@param commenters function[] A table of functions which can be used to 
+---  restore the commented status of the lines
+---@param opts SplitOpts
+---@return string[][]
+---@return function[] # Functions which be used to comment the results later on
 function M.unsplit_lines(lines_recombined, commented, commenters, opts)
     local lines_unsplit = { { } }
     local commenters_unsplit = { commenters[1] }
+    -- If the unsplitter matches the split pattern, it's safe to assume the
+    -- user always wants the unsplitter to take precedence, i.e. they want the
+    -- line to get unsplit, but not re-split again afterwards.
+    local always_unsplit = opts.unsplitter:match(opts.pattern)
 
     -- Collapse each chunk of commented/uncommented lines into single lines.
     local prev_line_commented = commented[1]
     for lnum, line_parts in ipairs(lines_recombined) do
+
         local curr_line_commented = commented[lnum]
-        if prev_line_commented == curr_line_commented then
+
+        if prev_line_commented ~= curr_line_commented then
+            table.insert(lines_unsplit, line_parts)
+            table.insert(commenters_unsplit, commenters[lnum])
+        else
             local line = lines_unsplit[#lines_unsplit]
+
             if #line == 0 then
                 table.insert(line, line_parts[1])
             else
                 local unsplit_line = line[#line] .. opts.unsplitter .. line_parts[1]
-                if string.match(unsplit_line, opts.pattern) then
+
+                -- If the unsplit line matches the original split pattern, then
+                -- conceptually we would want it to seem like the line then
+                -- gets split by the pattern again, i.e. that the split pattern
+                -- takes precedence. So we just don't perform the unsplit in
+                -- such cases.
+                if unsplit_line:match(opts.pattern) and not always_unsplit then
                     table.insert(line, line_parts[1])
                 else
                     line[#line] = unsplit_line
                 end
             end
+
             for i = 2, #line_parts do table.insert(line, line_parts[i]) end
-        else
-            table.insert(lines_unsplit, line_parts)
-            table.insert(commenters_unsplit, commenters[lnum])
         end
         prev_line_commented = curr_line_commented
     end
@@ -362,9 +457,10 @@ function M.unsplit_lines(lines_recombined, commented, commenters, opts)
     return lines_unsplit, commenters_unsplit
 end
 
+---@private
 ---@param lines string[]
----@param quote_chars  table
----@param brace_chars  table
+---@param quote_chars { left: string[], right: string[] }
+---@param brace_chars { left: string[], right: string[] }
 ---@return table
 function M.get_ignored_chunks(lines, quote_chars, brace_chars)
     local quotes_ok = quote_chars.left and quote_chars.right
@@ -376,7 +472,7 @@ function M.get_ignored_chunks(lines, quote_chars, brace_chars)
 
     local quote_runs, brace_runs
 
-    if not quotes_ok then
+    if quotes_ok then
         quote_runs = M.get_enclosed_chunks(
             lines,
             quote_chars.left,
@@ -384,7 +480,7 @@ function M.get_ignored_chunks(lines, quote_chars, brace_chars)
         )
     end
 
-    if not braces_ok then
+    if braces_ok then
         brace_runs = M.get_enclosed_chunks(
             lines,
             brace_chars.left,
@@ -397,6 +493,7 @@ function M.get_ignored_chunks(lines, quote_chars, brace_chars)
 end
 
 
+---@private
 ---@param lines table A table of lines 
 ---@param left_braces table Left brace characters
 ---@param right_braces table Right brace characters

@@ -44,22 +44,22 @@
 ---@brief ]]
 ---@tag split.features
 ---@brief [[
----*  **Interactivity**: split.nvim supports an interactive mode which allows
+---*  Interactivity: split.nvim supports an interactive mode which allows
 ---   you to use shortcuts for complex split patterns. For example, you might
 ---   press `<` in interactive mode to split text by any of `<`, `<=`, `>`,
----   `>=`, and `==`.
+---   `>=`, and `==`. See |split.interactivity| for more information.
 ---
----*  **Comments**: split.nvim is aware of comments and supports tree-sitter.
+---*  Comments: split.nvim is aware of comments and supports tree-sitter.
 ---   If you try to split a region with both commented and uncommented code,
 ---   only the uncommented code will be affected.
 ---
----*  **braces/quotes**: split.nvim is aware of braces and quotes, and
+---*  braces/quotes: split.nvim is aware of braces and quotes, and
 ---   generally will not insert linebreaks in these regions unless you want it
 ---   to. If you want to break up text within a set of quotes or brackets, use
 ---   one of vim's built-in text objects, e.g. `gsib` to split within `()`,
 ---   `gsiB` to split within `{}`, `gsi"` to split within `""`, etc.
 ---
----*  **Indentation**: split.nvim will by default reapply indentation after
+---*  Indentation: split.nvim will by default reapply indentation after
 ---   splitting text. By default this is done using the default indenter (see
 ---   |=|), but this is configurable :)
 ---@brief ]]
@@ -74,7 +74,8 @@
 ---mappings: `gs` to split by `,` in operator-pending mode, and `gS` to split
 ---in interactive mode, which allows you to choose from a wider variety of
 ---split patterns. You can easily change the default behaviour by passing a
----table of options to `setup()`.
+---table of options to `setup()`. See |split.config.SplitConfigInput| for
+---the full set of configuration options.
 ---@brief ]]
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -82,13 +83,39 @@ local M = {}
 
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---Configure the behaviour of split.nvim
----@param config? SplitConfig User configuration
+---@param config? SplitConfigInput User configuration
 ---@see split.config
 ---@usage [[
 ----- Use the default configuration
 ---require("split").setup()
 ---
------ Use some custom config, in this case a super simple setup that splits
+----- The default configuration is equivalent to this:
+---require("split").setup({
+---     keymaps = {
+---         ["gs"]  = {
+---             pattern = ",",
+---             operator_pending = true,
+---             interactive = false,
+---         },
+---         ["gss"] = {
+---             pattern = ",",
+---             operator_pending = false,
+---             interactive = false,
+---         },
+---         ["gS"]  = {
+---             pattern = ",",
+---             operator_pending = true,
+---             interactive = true,
+---         },
+---         ["gSS"] = {
+---             pattern = ",",
+---             operator_pending = false,
+---             interactive = true
+---         },
+---     },
+---})
+---
+----- Some custom config, in this case a super simple setup that splits 
 ----- on commas or semicolons and doesn't use operator-pending mode.
 ---require("split").setup({
 ---    keymaps = {

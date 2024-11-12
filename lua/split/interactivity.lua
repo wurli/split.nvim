@@ -1,30 +1,75 @@
 local utils = require("split.utils")
 local config = require("split.config"):get()
 
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---@mod split.interactivity Interactivity
+---@brief [[
+---When split.nvim is called in interactive mode, the user will be
+---prompted to enter options to perform the split. In this mode,
+---special keys are used to enter non-standard options:
+---
+---* <C-x> can be used to enter a non-standard split pattern
+---* <CR> can be used to cycle through the options for where
+---  linebreaks are placed relative to the split pattern
+---* <C-s> can be used to toggle whether the original line
+---  breaks should be retained in addition to the new ones.
+---
+---To execute the split in interactive mode, use one of the alias keys
+---set during configuration. E.g. by default you can use `.` to split
+---lines by sentence, `;` to split lines by semicolon, etc.
+---@brief ]]
+---@tag split.interactivity.default_aliases
+---@brief [[
+---When using split.nvim in interactive mode, the default pattern aliases
+---are as follows:
+---* `","`: Split on commas.
+---* `";"`: Split on semicolons.
+---* `" "`: Split on one or more whitespace characters.
+---* `"+"`: Split on `+`, `-`, `/`, and `%`, provided these are
+---       surrounded by one or more whitespace characters.
+---* `"<"`: Split by `<`, `<=`, `==`, `>`, or `>=`
+---* `"."`: Split text so that each sentence occupies a single line.
+---@brief ]]
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 local M = {}
 
+---@private
 ---Prompt the user for split options
 ---
 ---@param opts? SplitOpts
 ---@return SplitOpts | nil
+---@see split.config.SplitOpts
 function M.get_opts_interactive(opts)
     opts = opts or config.keymap_defaults
 
-    local flatten = function(x) return vim.iter(x):flatten():totable() end
-
     local key_options = vim.tbl_extend("force", config.pattern_aliases, {
         [vim.keycode("<C-x>")] = "custom_pattern",
-        [vim.keycode("<CR>")] = "cycle_break_placement"
+        [vim.keycode("<CR>")] = "cycle_break_placement",
+        [vim.keycode("<C-s>")] = "toggle_unsplitter"
     })
+
+    local prompt = function(parts)
+        local out = M.user_input_char(
+            vim.iter(parts):flatten():totable(),
+            key_options
+        )
+        if out == "cancel" then return end
+        return out
+    end
 
     local prompt_parts = {
         { { "Split Text", "ModeMsg" } },
+        -- Placeholder for custom pattern text
         { { "", "Normal" } },
+        -- Placeholder for break placement text
+        { { "", "Normal" } },
+        -- Placeholder for unsplitter text
         { { "", "Normal" } },
         { { ": ", "Normal" } }
     }
 
-    local selection = M.user_input_char(flatten(prompt_parts), key_options)
+    local selection = prompt(prompt_parts)
 
     local break_placement_opts = {
         after_separator  = "before_separator",
@@ -36,27 +81,47 @@ function M.get_opts_interactive(opts)
         return break_placement_opts[x]
     end
 
-    local opts_overrides = {}
+    ---@type SplitOpts
+    local opts2 = {}
 
     while selection do
         if selection == "cycle_break_placement" then
-            opts_overrides.break_placement = cycle_break_placement(
-                opts_overrides.break_placement or opts.break_placement
+            opts2.break_placement = cycle_break_placement(
+                opts2.break_placement or opts.break_placement
             )
             prompt_parts[2] = {
                 { " ", "Normal" },
                 { "[", "TabLine" },
-                { opts_overrides.break_placement, "Normal" },
+                { ('break_placement="%s"'):format(opts2.break_placement), "Normal" },
                 { "]", "TabLine" },
             }
-            selection = M.user_input_char(flatten(prompt_parts), key_options)
+            selection = prompt(prompt_parts)
 
         elseif selection == "custom_pattern" then
-            opts_overrides.pattern = M.user_input_text("Enter split pattern: ")
+            opts2.pattern = M.user_input_text("Enter split pattern: ")
             break
 
+        elseif selection == "toggle_unsplitter" then
+            local input_type
+            opts2.unsplitter, input_type = M.user_input_text(
+                "Enter unsplitter text: ",
+                opts2.unsplitter or opts.unsplitter or ""
+            )
+            if input_type == "special_key" then
+                opts2.unsplitter = opts.unsplitter
+                prompt_parts[3] = { { "", "Normal" } }
+            else
+                prompt_parts[3] = {
+                    { " ", "Normal" },
+                    { "[", "TabLine" },
+                    { ('unsplitter="%s"'):format(opts2.unsplitter), "Normal" },
+                    { "]", "TabLine" },
+                }
+            end
+            selection = prompt(prompt_parts)
+
         elseif type(selection) == "string" then
-            opts_overrides.pattern = selection
+            opts2.pattern = selection
             break
 
         elseif type(selection) == "table" then
@@ -72,16 +137,20 @@ function M.get_opts_interactive(opts)
         return nil
     end
 
-    local out_opts = vim.tbl_deep_extend("force", opts, opts_overrides)
+    opts2 = vim.tbl_deep_extend("keep", opts2, opts)
 
-    return out_opts
+    return opts2
 end
 
 M.namespace = {
     user_input = vim.api.nvim_create_namespace("split_user_input")
 }
 
---- Prompt for user input
+---@private
+---Prompt for user input
+---
+---This function ended up more feature-rich than it needs to be, but I'm not 
+---going to change it because I might need those features again one day.
 ---
 ---@param prompt string The prompt to show the user
 ---@param placeholder string? Placeholder text
@@ -144,6 +213,7 @@ function M.user_input_text(prompt, placeholder, special_keys)
     return input, "text"
 end
 
+---@private
 ---@param prompt table The prompt to show ahead of the input.
 ---@param expected table Allows the user to specify special keys and their 
 ---  meanings, e.g. passing `{ ["a"] = "foo", [vim.keycode("<BS>")] = "bar" }`

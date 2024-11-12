@@ -1,9 +1,7 @@
+local utils = require("split.utils")
+
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@mod split.config Configuration
----@tag split.config.defaults
----@brief [[
----split.nvim does stuff
----@brief ]]
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -12,51 +10,49 @@
 ---@class SplitOpts
 ---
 ---The lua pattern to split on. Defaults to `","`.
----@field pattern? string
+---@field pattern? string | string[]
 ---
----Where to place the linebreak in relation to the
----separator. By default the linebreak will be inserted
----after the separator, i.e. split pattern.
+---Where to place the linebreak in relation to the separator. By
+---default the linebreak will be inserted after the separator, i.e.
+---split pattern.
 ---@field break_placement? BreakPlacement
 ---
----Whether to enter operator-pending mode when the mapping
----is called
+---Whether to enter operator-pending mode when the mapping is called
 ---@field operator_pending? boolean
 ---
----A function to be applied to each separator before the
----split text is recombined
----@field transform_separators? fun(x: string, opts: SplitOpts): string | nil
+---A function to be applied to each separator before the split text is
+---recombined
+---@field transform_separators? fun(x: string, opts: SplitOpts): string
 ---
----A function to be applied to each segment before the split
----text is recombined
----@field transform_segments? fun(x: string, opts: SplitOpts): string | nil
+---A function to be applied to each segment before the split text is
+---recombined
+---@field transform_segments? fun(x: string, opts: SplitOpts): string
 ---
----A function to reindent the text after it has been split.
----This will be passed the marks `"["` and `"]"`. Can be
----`nil` if no indentation is desired. The default is to
----reindent using `=`, but you can set this to indent using
----the active LSP's formatter by setting
+---A function to reindent the text after it has been split. This will
+---be passed the marks `"["` and `"]"`. Can be `nil` if no indentation
+---is desired. The default is to reindent using `=`, but you can set
+---this to indent using the active LSP's formatter by setting
 ---`indenter = require("split.indent").indent_lsp`
 ---@field indenter? fun(m1: string, m2: string)
 ---
----A string that can be used to collapse lines into a single
----string before splitting. This can be helpful, e.g. if you
----want to transform multiple lines of text so that each
----line contains a single sentence.
+---A string that can be used to collapse lines into a single string
+---before splitting. This can be helpful, e.g. if you want to
+---transform multiple lines of text so that each line contains a
+---single sentence.
 ---@field unsplitter? string | nil
 ---
----Whether to enter interactive mode when calling the
----mapping. Defaults to `false`.
+---Whether to enter interactive mode when calling the mapping.
+---Defaults to `false`.
 ---@field interactive? boolean
 ---
----Characters used to delimit quoted regions, within which
----no linebreaks will be inserted. By default, recognised
----quote characters are ", ', and `.
+---Characters used to delimit quoted regions, within which no
+---linebreaks will be inserted. By default, recognised quote
+---characters are ", ', and `.
 ---@field brace_characters? { left: string[], right: string[] }
 ---
----Characters used to delimit embraced regions, within which
----no linebreaks will be inserted. By default, recognised
----brace pairs are `[]`, `()`, and `{}`.
+---Characters used to delimit embraced regions, within which no
+---linebreaks will be inserted. By default, recognised brace pairs are
+---`[]`, `()`, and `{}`.
 ---@field quote_characters? { left: string[], right: string[] }
 
 ---Options for break placement
@@ -69,45 +65,49 @@
 
 
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
----@class SplitConfig
----A table of keymappings. Table keys should give a keymapping to set, table
----values should be a subset of |split.config.SplitOpts|.
+---@class SplitConfigInput
+---
+---A table of keymappings. Table keys should give a keymapping to set,
+---table values should be a subset of |split.config.SplitOpts|.
 ---@field keymaps? table<string, SplitOpts>
----A table of aliases to use in interactive mode. Table keys give the alias,
----which should be a single character, and table values give the pattern to use
----when that character is entered by the user. Alternatively you can specify a
----table of |split.config.SplitOpts| to further customise the behaviour of each
----alias. The default aliases are:
----* `","`: Split on commas.
----* `";"`: Split on semicolons.
----* `" "`: Split on one or more whitespace characters.
----* `"+"`: Split on `+`, `-`, `/`, and `%`, provided these are surrounded by
----one or more whitespace characters.
----* `"."`: Split by sentence.
----@field pattern_aliases? table<string, string | SplitOpts>
----These are the settings which will be used unless the keymap in question
----specifies otherwise.
+---
+---A table of aliases to use in interactive mode. Table keys give the
+---alias, which should be a single character, and table values give
+---the pattern to use when that character is entered by the user.
+---Alternatively you can specify a table of |split.config.SplitOpts|
+---to further customise the behaviour of each alias.
+---See |split.interactivity.default_aliases| for the default aliases.
+---@field pattern_aliases table<string, string | SplitOpts>
+---
+---Options to use by default when setting keymaps.
 ---@field keymap_defaults? SplitOpts
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
----@class SplitConfigComplete
+---@class SplitConfig
 ---@field keymaps table<string, SplitOpts>
 ---@field pattern_aliases table<string, string | SplitOpts>
 ---@field keymap_defaults SplitOpts
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
-local default_transformation = function(type, use_leading_space)
+---@param tb { trim_l: BreakPlacement[], trim_r: BreakPlacement[], pad_l: BreakPlacement[], pad_r: BreakPlacement[] }
+local make_transformation = function(tb)
     ---@param s string
     ---@param opts SplitOpts
+    ---@return string
     return function(s, opts)
-        s = vim.trim(s)
-        if type == "separators" and
-            use_leading_space and
-            opts.break_placement == "before_separator" then
+        if utils.match(opts.break_placement, tb.trim_l or {}) ~= -1 then
+            s = s:gsub("^%s+", "")
+        end
+        if utils.match(opts.break_placement, tb.trim_r or {}) ~= -1 then
+            s = s:gsub("%s*$", "")
+        end
+        if utils.match(opts.break_placement, tb.pad_l or {}) ~= -1 then
+            s = " " .. s
+        end
+        if utils.match(opts.break_placement, tb.pad_r or {}) ~= -1 then
             s = s .. " "
         end
         return s
@@ -116,7 +116,7 @@ end
 
 local Config = {
     state = {},
-    ---@type SplitConfigComplete
+    ---@type SplitConfig
     config = {
         keymaps = {
             ["gs"]  = { operator_pending = true, pattern = "," },
@@ -124,12 +124,16 @@ local Config = {
             ["gS"]  = { operator_pending = true, interactive = true },
             ["gSS"] = { operator_pending = false, interactive = true },
         },
+
         pattern_aliases = {
             [","] = ",",
             [";"] = ";",
             [" "] = "%s+",
             ["+"] = " [+-/%] ",
-            ["<"] = "  ",
+            ["<"] = {
+                pattern = { "<[^=]", "<=", "==", ">[^=]", ">=" },
+                break_placement = "before_separator"
+            },
             ["."] = {
                 pattern = "[%.?!]%s+",
                 unsplitter = " ",
@@ -141,9 +145,15 @@ local Config = {
             pattern = ",",
             break_placement = "after_separator",
             operator_pending = false,
-            transform_separators = default_transformation("separators", true),
-            transform_segments = default_transformation("segments", false),
-            transform_lines = nil,
+            transform_segments = make_transformation({
+                trim_l = { "before_separator", "on_separator", "after_separator" },
+                trim_r = { "before_separator", "on_separator", "after_separator" },
+            }),
+            transform_separators = make_transformation({
+                trim_l = { "before_separator" },
+                trim_r = { "before_separator", "after_separator" },
+                pad_r = { "before_separator" }
+            }),
             indenter = require("split.indent").indent_equalprg,
             unsplitter = nil,
             interactive = false,
@@ -154,7 +164,7 @@ local Config = {
 }
 
 ---@package
----@param cfg SplitConfig
+---@param cfg SplitConfigInput
 function Config:set(cfg)
     if cfg then
         self.config = vim.tbl_deep_extend("force", self.config, cfg)
@@ -167,11 +177,10 @@ function Config:set(cfg)
             )
         end
     end
-
     return self
 end
 
----@return SplitConfigComplete
+---@return SplitConfig
 function Config:get()
     return self.config
 end
