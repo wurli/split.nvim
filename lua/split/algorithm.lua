@@ -89,13 +89,7 @@ function M.split(type, opts)
     -----------------------
     -- Perform the split --
     -----------------------
-    local lines_split = M.split_lines(
-        lines_uncommented,
-        opts.pattern,
-        opts.quote_characters,
-        opts.brace_characters,
-        range[1]
-    )
+    local lines_split = M.split_lines(lines_uncommented, opts, range[1])
 
     -----------------------------------------------
     -- Apply any transformations to split pieces --
@@ -205,12 +199,8 @@ end
 ---particularly adventurous spirit.
 ---
 ---@param lines string[] An array of lines to split
----@param pattern string | string[] Either a single split pattern or an array
----  giving several patterns to split on.
----@param quotes { left: string[], right: string[] } Characters used
----  to delimit quoted regions, within which no text will be split.
----@param braces { left: string[], right: string[] } Characters used
----  to delimit embraced regions, within which no text will be split.
+---@param opts SplitOpts Additional options to use when performting the
+---  split. See |split.config.SplitOpts| for more information.
 ---@param linenr? integer Optionally the start line number, 1-indexed. If
 ---  supplied, this is used with tree-sitter to detect which of the
 ---  matches for `pattern` are commented. If not supplied it is assumed
@@ -219,13 +209,12 @@ end
 ---  used with tree-sitter to detect which of the matches for `pattern`
 ---  are commented. Defaults to the current buffer.
 ---@return SegSepPair[][]
-function M.split_lines(lines, pattern, quotes, braces, linenr, bufnr)
-    pattern    = pattern or ",%s*"
-    linenr = linenr or 1
-    bufnr      = bufnr or 0
+function M.split_lines(lines, opts, linenr, bufnr)
+    linenr  = linenr or 1
+    bufnr   = bufnr or 0
 
     local sep_positions = vim.tbl_map(
-        function(line) return utils.gfind(line, pattern) end,
+        function(line) return utils.gfind(line, opts.pattern) end,
         lines
     )
 
@@ -235,7 +224,7 @@ function M.split_lines(lines, pattern, quotes, braces, linenr, bufnr)
         return vim.tbl_map(function(l) return { { seg = l } } end, lines)
     end
 
-    local unsplittable_chunks = M.get_ignored_chunks(lines, quotes, braces)
+    local unsplittable_chunks = M.get_ignored_chunks(lines, opts.quote_characters, opts.brace_characters)
 
     local is_in_braces = function(split_pos)
         for _, chunk in pairs(unsplittable_chunks) do
@@ -279,14 +268,26 @@ function M.split_lines(lines, pattern, quotes, braces, linenr, bufnr)
         end):
         totable()
 
-    local all_commented = vim.iter(sep_positions):flatten(1):all(function(x) return x[3] end)
+    local comments_found = vim.iter(sep_positions):flatten(1):any(function(x) return x[3] end)
+    local code_found     = vim.iter(sep_positions):flatten(1):any(function(x) return not x[3] end)
 
-    -- If only some of the separators are commented, then discard them
-    -- (otherwise, i.e. if they're all commented, they should all be kept)
-    if not all_commented then
-        sep_positions = vim.iter(sep_positions):
-            map(function(x) return vim.tbl_filter(function(xi) return not xi[3] end, x) end):
-            totable()
+    -- Discard separators based on 'smart_ignore'
+    if comments_found and code_found and opts.smart_ignore ~= "none" then
+        sep_positions = vim.tbl_map(
+            function(x)
+                return vim.tbl_filter(
+                    function(xi)
+                        if opts.smart_ignore == "comments" then return not xi[3] end
+                        if opts.smart_ignore == "code"     then return xi[3] end
+                        error(("Unrecognised configuration `smart_ignore = %s`"):format(
+                                vim.inspect(opts.smart_ignore)
+                        ))
+                    end,
+                    x
+                )
+            end,
+            sep_positions
+        )
     end
 
     -- `segments` will be a table of tables. Each subtable will have the
@@ -418,15 +419,26 @@ function M.unsplit_lines(lines_recombined, commented, commenters, opts)
     -- If the unsplitter matches the split pattern, it's safe to assume the
     -- user always wants the unsplitter to take precedence, i.e. they want the
     -- line to get unsplit, but not re-split again afterwards.
-    local always_unsplit = opts.unsplitter:match(opts.pattern)
+    local pattern = type(opts.pattern) == "table" and opts.pattern or { opts.pattern }
+    local always_unsplit = vim.iter(pattern):any(function(p) return opts.unsplitter:match(p) end)
+    local comments_found = vim.iter(commented):any(function(x) return x end)
+    local code_found = vim.iter(commented):any(function(x) return not x end)
 
     -- Collapse each chunk of commented/uncommented lines into single lines.
     local prev_line_commented = commented[1]
     for lnum, line_parts in ipairs(lines_recombined) do
-
         local curr_line_commented = commented[lnum]
 
-        if prev_line_commented ~= curr_line_commented then
+        -- Only unsplit if:
+        -- * Current line is a comment and prev line isn't
+        -- * Current line isn't a comment and previous line is
+        -- * If lines are a mix of comments and code, then use 'smart_ignore'
+        local is_smart_ignore = (comments_found and code_found) and (
+            (opts.smart_ignore == "comments" and curr_line_commented)
+            or (opts.smart_ignore == "code" and not curr_line_commented)
+            or (opts.smart_ignore == "none" and false)
+        )
+        if curr_line_commented ~= prev_line_commented or is_smart_ignore then
             table.insert(lines_unsplit, line_parts)
             table.insert(commenters_unsplit, commenters[lnum])
         else
@@ -440,8 +452,8 @@ function M.unsplit_lines(lines_recombined, commented, commenters, opts)
                 -- If the unsplit line matches the original split pattern, then
                 -- conceptually we would want it to seem like the line then
                 -- gets split by the pattern again, i.e. that the split pattern
-                -- takes precedence. So we just don't perform the unsplit in
-                -- such cases.
+                -- takes precedence. So in such cases we just don't unsplit
+                -- in the first place.
                 if unsplit_line:match(opts.pattern) and not always_unsplit then
                     table.insert(line, line_parts[1])
                 else
@@ -451,7 +463,7 @@ function M.unsplit_lines(lines_recombined, commented, commenters, opts)
 
             for i = 2, #line_parts do table.insert(line, line_parts[i]) end
         end
-        prev_line_commented = curr_line_commented
+        prev_line_commented = commented[lnum]
     end
 
     return lines_unsplit, commenters_unsplit

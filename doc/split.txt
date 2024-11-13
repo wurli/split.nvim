@@ -187,23 +187,42 @@ SplitOpts                                               *split.config.SplitOpts*
         {interactive?} (boolean)
             Whether to enter interactive mode when calling the mapping.
             Defaults to `false`.
+        {smart_ignore?} (SmartIgnore)
+            If the selected region contains both commented and uncommented
+            code, this option controls which portions should be split. Note
+            that this only takes effect if the selected region contains a mix
+            of commented and uncommented code; if the selected region is
+            completely commented, the split will still be applied even if
+            `smart_ignore = "commments"`. It's so smart!
+            See |split.config.SmartIgnore| for available options.
         {brace_characters?} ({left:string[],right:string[]})
-            Characters used to delimit quoted regions, within which no
-            linebreaks will be inserted. By default, recognised quote
-            characters are ", ', and `.
+            Characters used to delimit quoted regions, within which
+            linebreaks will not be inserted. By default, this applies to
+            double-quotes, single-quotes, and backticks.
         {quote_characters?} ({left:string[],right:string[]})
-            Characters used to delimit embraced regions, within which no
-            linebreaks will be inserted. By default, recognised brace pairs are
-            `[]`, `()`, and `{}`.
+            Characters used to delimit embraced regions, within which
+            linebreaks will not be inserted. By default, recognised brace pairs
+            are `[]`, `()`, and `{}`.
 
 
 BreakPlacement                                     *split.config.BreakPlacement*
-    Options for break placement
+    Options for `break_placement`
 
     Variants: ~
         ("after_separator")   Place the linbreak before the split pattern
         ("before_separator")  Place the linebreak after the split pattern
         ("on_separator")      Replace the split pattern with a linebreak
+
+
+SmartIgnore                                           *split.config.SmartIgnore*
+    Options for `smart_ignore`. These options only take effect if the
+    region being split contains a mix of commented and uncommented
+    code.
+
+    Variants: ~
+        ("comments")  Only split commented regions
+        ("code")      Only split uncommented regions
+        ("none")      Split everything
 
 
 SplitConfigInput                                 *split.config.SplitConfigInput*
@@ -289,7 +308,7 @@ SegSepPair                                          *split.algorithm.SegSepPair*
 
 
                                                    *split.algorithm.split_lines*
-M.split_lines({lines}, {pattern}, {quotes}, {braces}, {linenr?}, {bufnr?})
+M.split_lines({lines}, {opts}, {linenr?}, {bufnr?})
     Split text by inserting linebreaks
 
     This is a low-level helper which may be of use to users with a
@@ -298,12 +317,8 @@ M.split_lines({lines}, {pattern}, {quotes}, {braces}, {linenr?}, {bufnr?})
 
     Parameters: ~
         {lines} (string[]) An array of lines to split
-        {pattern} (string|string[]) Either a single split pattern or an array
-              giving several patterns to split on.
-        {quotes} ({left:string[],right:string[]}) Characters used
-              to delimit quoted regions, within which no text will be split.
-        {braces} ({left:string[],right:string[]}) Characters used
-              to delimit embraced regions, within which no text will be split.
+        {opts} (SplitOpts) Additional options to use when performting the
+              split. See |split.config.SplitOpts| for more information.
         {linenr?} (integer) Optionally the start line number, 1-indexed. If
               supplied, this is used with tree-sitter to detect which of the
               matches for `pattern` are commented. If not supplied it is assumed

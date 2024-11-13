@@ -45,21 +45,38 @@ local utils = require("split.utils")
 ---Defaults to `false`.
 ---@field interactive? boolean
 ---
----Characters used to delimit quoted regions, within which no
----linebreaks will be inserted. By default, recognised quote
----characters are ", ', and `.
+---If the selected region contains both commented and uncommented
+---code, this option controls which portions should be split. Note
+---that this only takes effect if the selected region contains a mix
+---of commented and uncommented code; if the selected region is
+---completely commented, the split will still be applied even if
+---`smart_ignore = "commments"`. It's so smart!
+---See |split.config.SmartIgnore| for available options.
+---@field smart_ignore? SmartIgnore
+---
+---Characters used to delimit quoted regions, within which
+---linebreaks will not be inserted. By default, this applies to
+---double-quotes, single-quotes, and backticks.
 ---@field brace_characters? { left: string[], right: string[] }
 ---
----Characters used to delimit embraced regions, within which no
----linebreaks will be inserted. By default, recognised brace pairs are
----`[]`, `()`, and `{}`.
+---Characters used to delimit embraced regions, within which
+---linebreaks will not be inserted. By default, recognised brace pairs
+---are `[]`, `()`, and `{}`.
 ---@field quote_characters? { left: string[], right: string[] }
 
----Options for break placement
+---Options for `break_placement`
 ---@alias BreakPlacement
 ---| '"after_separator"' # Place the linbreak before the split pattern
 ---| '"before_separator"' # Place the linebreak after the split pattern
 ---| '"on_separator"' # Replace the split pattern with a linebreak
+
+---Options for `smart_ignore`. These options only take effect if the
+---region being split contains a mix of commented and uncommented
+---code.
+---@alias SmartIgnore
+---| '"comments"' # Only split commented regions
+---| '"code"' # Only split uncommented regions
+---| '"none"' # Split everything
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -137,6 +154,7 @@ local Config = {
             ["."] = {
                 pattern = "[%.?!]%s+",
                 unsplitter = " ",
+                smart_ignore = "code",
                 quote_characters = {},
                 brace_characters = {}
             }
@@ -157,6 +175,7 @@ local Config = {
             indenter = require("split.indent").indent_equalprg,
             unsplitter = nil,
             interactive = false,
+            smart_ignore = "comments",
             quote_characters = { left = { "'", '"', "`" }, right = { "'", '"', "`" } },
             brace_characters = { left = { "(", "{", "[" }, right = { ")", "}", "]" } }
         },
