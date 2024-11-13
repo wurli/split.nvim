@@ -110,7 +110,7 @@ local utils = require("split.utils")
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ---@param tb { trim_l: BreakPlacement[], trim_r: BreakPlacement[], pad_l: BreakPlacement[], pad_r: BreakPlacement[] }
-local make_transformation = function(tb)
+local make_transformer = function(tb)
     ---@param s string
     ---@param opts SplitOpts
     ---@return string
@@ -163,11 +163,11 @@ local Config = {
             pattern = ",",
             break_placement = "after_separator",
             operator_pending = false,
-            transform_segments = make_transformation({
+            transform_segments = make_transformer({
                 trim_l = { "before_separator", "on_separator", "after_separator" },
                 trim_r = { "before_separator", "on_separator", "after_separator" },
             }),
-            transform_separators = make_transformation({
+            transform_separators = make_transformer({
                 trim_l = { "before_separator" },
                 trim_r = { "before_separator", "after_separator" },
                 pad_r = { "before_separator" }
