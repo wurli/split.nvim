@@ -5,11 +5,35 @@ local utils = require("split.utils")
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
+
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---@class SplitConfigInput
+---
+---A table of keymappings. Table keys should give a keymapping to set,
+---table values should be a subset of |split.config.SplitOpts|.
+---@field keymaps? table<string, SplitOpts>
+---
+---A table of aliases to use in interactive mode. Table keys give the
+---alias, which should be a single character, and table values give
+---the pattern to use when that character is entered by the user.
+---Alternatively you can specify a table of |split.config.SplitOpts|
+---to further customise the behaviour of each alias.
+---See |split.interactivity.default_aliases| for the default aliases.
+---@field pattern_aliases table<string, string | SplitOpts>
+---
+---Options to use by default when setting keymaps.
+---@field keymap_defaults? SplitOpts
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---Plugin configuration
 ---@class SplitOpts
 ---
----The lua pattern to split on. Defaults to `","`.
+---The lua pattern to split on. Defaults to `","`. Multiple patterns
+---can also be provided in a table if a single string doesn't give
+---enough flexibility.
 ---@field pattern? string | string[]
 ---
 ---Where to place the linebreak in relation to the separator. By
@@ -63,13 +87,21 @@ local utils = require("split.utils")
 ---linebreaks will not be inserted. By default, recognised brace pairs
 ---are `[]`, `()`, and `{}`.
 ---@field quote_characters? { left: string[], right: string[] }
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
+
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---Options for `break_placement`
 ---@alias BreakPlacement
 ---| '"after_separator"' # Place the linbreak before the split pattern
 ---| '"before_separator"' # Place the linebreak after the split pattern
 ---| '"on_separator"' # Replace the split pattern with a linebreak
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
+
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---Options for `smart_ignore`. These options only take effect if the
 ---region being split contains a mix of commented and uncommented
 ---code.
@@ -82,22 +114,74 @@ local utils = require("split.utils")
 
 
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
----@class SplitConfigInput
----
----A table of keymappings. Table keys should give a keymapping to set,
----table values should be a subset of |split.config.SplitOpts|.
----@field keymaps? table<string, SplitOpts>
----
----A table of aliases to use in interactive mode. Table keys give the
----alias, which should be a single character, and table values give
----the pattern to use when that character is entered by the user.
----Alternatively you can specify a table of |split.config.SplitOpts|
----to further customise the behaviour of each alias.
----See |split.interactivity.default_aliases| for the default aliases.
----@field pattern_aliases table<string, string | SplitOpts>
----
----Options to use by default when setting keymaps.
----@field keymap_defaults? SplitOpts
+---@tag split.config.defaults
+---@brief [[
+---The following gives the full default configuration for `split.nvim`:
+--->lua
+---    {
+---        keymaps = {
+---            ["gs"]  = {
+---                pattern = ",",
+---                operator_pending = true,
+---                interactive = false,
+---            },
+---            ["gss"] = {
+---                pattern = ",",
+---                operator_pending = false,
+---                interactive = false,
+---            },
+---            ["gS"]  = {
+---                pattern = ",",
+---                operator_pending = true,
+---                interactive = true,
+---            },
+---            ["gSS"] = {
+---                pattern = ",",
+---                operator_pending = false,
+---                interactive = true,
+---            },
+---        },
+---    
+---        pattern_aliases = {
+---            [","] = ",",
+---            [";"] = ";",
+---            [" "] = "%s+",
+---            ["+"] = " [+-/%] ",
+---            ["<"] = {
+---                pattern = { "<[^=]", "<=", "==", ">[^=]", ">=" },
+---                break_placement = "before_separator"
+---            },
+---            ["."] = {
+---                pattern = "[%.?!]%s+",
+---                unsplitter = " ",
+---                smart_ignore = "code",
+---                quote_characters = {},
+---                brace_characters = {}
+---            }
+---        },
+---        keymap_defaults = {
+---            pattern = ",",
+---            break_placement = "after_separator",
+---            operator_pending = false,
+---            transform_segments = make_transformer({
+---                trim_l = { "before_separator", "on_separator", "after_separator" },
+---                trim_r = { "before_separator", "on_separator", "after_separator" },
+---            }),
+---            transform_separators = make_transformer({
+---                trim_l = { "before_separator" },
+---                trim_r = { "before_separator", "after_separator" },
+---                pad_r = { "before_separator" }
+---            }),
+---            indenter = require("split.indent").indent_equalprg,
+---            unsplitter = nil,
+---            interactive = false,
+---            smart_ignore = "comments",
+---            quote_characters = { left = { "'", '"', "`" }, right = { "'", '"', "`" } },
+---            brace_characters = { left = { "(", "{", "[" }, right = { ")", "}", "]" } }
+---        },
+---    }
+---<
+---@brief ]]
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -108,6 +192,8 @@ local utils = require("split.utils")
 ---@field pattern_aliases table<string, string | SplitOpts>
 ---@field keymap_defaults SplitOpts
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
 
 ---@param tb { trim_l: BreakPlacement[], trim_r: BreakPlacement[], pad_l: BreakPlacement[], pad_r: BreakPlacement[] }
 local make_transformer = function(tb)
@@ -136,10 +222,26 @@ local Config = {
     ---@type SplitConfig
     config = {
         keymaps = {
-            ["gs"]  = { operator_pending = true, pattern = "," },
-            ["gss"] = { operator_pending = false, pattern = "," },
-            ["gS"]  = { operator_pending = true, interactive = true },
-            ["gSS"] = { operator_pending = false, interactive = true },
+            ["gs"]  = {
+                pattern = ",",
+                operator_pending = true,
+                interactive = false,
+            },
+            ["gss"] = {
+                pattern = ",",
+                operator_pending = false,
+                interactive = false,
+            },
+            ["gS"]  = {
+                pattern = ",",
+                operator_pending = true,
+                interactive = true,
+            },
+            ["gSS"] = {
+                pattern = ",",
+                operator_pending = false,
+                interactive = true,
+            },
         },
 
         pattern_aliases = {

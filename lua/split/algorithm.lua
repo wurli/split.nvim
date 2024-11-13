@@ -4,6 +4,12 @@ local comment       = require("split.comment")
 --
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@mod split.algorithm Algorithm
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---@tag split.algorithm.overview
 ---@brief [[
 ---The algorithm for splitting lines broadly consists of the following
 ---stages:
@@ -37,18 +43,15 @@ local comment       = require("split.comment")
 
 local M = {}
 
---~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
----@alias SplitType
+---@private
+---Split text by a pattern
+---
+---@param type?
+---The mode in which the function is called:
 ---| '"current_line"' # Call is for the current line
 ---| '"line"' # Call is in operator-pending `"line"` mode
 ---| '"block"' # Currently just an alias for `"line"`
 ---| '"char"' # Call is in operator-pending `"char"` mode
-
----@private
----Split text by a pattern
----
----@param type SplitType | nil 
----The mode in which the function is called.
 ---@param opts SplitOpts | nil 
 ---Additional options; see |split.config.SplitOpts| for more
 ---information.
@@ -183,16 +186,6 @@ function M.uncomment_lines(lines, range)
     return lines, commented, commenters
 end
 
----When a line is split, the result is an array where each element
----conforms to this pattern.
----@class SegSepPair
----
----A portion of the line which wasn't matched by the pattern.
----@field seg string
----
----A portion of the line which was matched by the provided pattern.
----@field sep? string
-
 ---Split text by inserting linebreaks
 ---
 ---This is a low-level helper which may be of use to users with a
@@ -325,6 +318,20 @@ function M.split_lines(lines, opts, linenr, bufnr)
 
     return out
 end
+
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---When a line is split, the result is an array where each element
+---conforms to this pattern.
+---@class SegSepPair
+---
+---A portion of the line which wasn't matched by the pattern.
+---@field seg string
+---
+---A portion of the line which was matched by the provided pattern.
+---@field sep? string
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
 
 --- Apply transformations to segments/separators before recombining
 ---

@@ -85,32 +85,6 @@ M.setup({config?})                                           *split.usage.setup*
         -- Use the default configuration
         require("split").setup()
 
-        -- The default configuration is equivalent to this:
-        require("split").setup({
-             keymaps = {
-                 ["gs"]  = {
-                     pattern = ",",
-                     operator_pending = true,
-                     interactive = false,
-                 },
-                 ["gss"] = {
-                     pattern = ",",
-                     operator_pending = false,
-                     interactive = false,
-                 },
-                 ["gS"]  = {
-                     pattern = ",",
-                     operator_pending = true,
-                     interactive = true,
-                 },
-                 ["gSS"] = {
-                     pattern = ",",
-                     operator_pending = false,
-                     interactive = true
-                 },
-             },
-        })
-
         -- Some custom config, in this case a super simple setup that splits 
         -- on commas or semicolons and doesn't use operator-pending mode.
         require("split").setup({
@@ -155,12 +129,31 @@ are as follows:
 ==============================================================================
 Configuration                                                     *split.config*
 
+SplitConfigInput                                 *split.config.SplitConfigInput*
+
+    Fields: ~
+        {keymaps?} (table<string,SplitOpts>)
+            A table of keymappings. Table keys should give a keymapping to set,
+            table values should be a subset of |split.config.SplitOpts|.
+        {pattern_aliases} (table<string,string|SplitOpts>)
+            A table of aliases to use in interactive mode. Table keys give the
+            alias, which should be a single character, and table values give
+            the pattern to use when that character is entered by the user.
+            Alternatively you can specify a table of |split.config.SplitOpts|
+            to further customise the behaviour of each alias.
+            See |split.interactivity.default_aliases| for the default aliases.
+        {keymap_defaults?} (SplitOpts)
+            Options to use by default when setting keymaps.
+
+
 SplitOpts                                               *split.config.SplitOpts*
     Plugin configuration
 
     Fields: ~
         {pattern?} (string|string[])
-            The lua pattern to split on. Defaults to `","`.
+            The lua pattern to split on. Defaults to `","`. Multiple patterns
+            can also be provided in a table if a single string doesn't give
+            enough flexibility.
         {break_placement?} (BreakPlacement)
             Where to place the linebreak in relation to the separator. By
             default the linebreak will be inserted after the separator, i.e.
@@ -225,22 +218,72 @@ SmartIgnore                                           *split.config.SmartIgnore*
         ("none")      Split everything
 
 
-SplitConfigInput                                 *split.config.SplitConfigInput*
-
-    Fields: ~
-        {keymaps?} (table<string,SplitOpts>)
-            A table of keymappings. Table keys should give a keymapping to set,
-            table values should be a subset of |split.config.SplitOpts|.
-        {pattern_aliases} (table<string,string|SplitOpts>)
-            A table of aliases to use in interactive mode. Table keys give the
-            alias, which should be a single character, and table values give
-            the pattern to use when that character is entered by the user.
-            Alternatively you can specify a table of |split.config.SplitOpts|
-            to further customise the behaviour of each alias.
-            See |split.interactivity.default_aliases| for the default aliases.
-        {keymap_defaults?} (SplitOpts)
-            Options to use by default when setting keymaps.
-
+                                                         *split.config.defaults*
+The following gives the full default configuration for `split.nvim`:
+>lua
+    {
+        keymaps = {
+            ["gs"]  = {
+                pattern = ",",
+                operator_pending = true,
+                interactive = false,
+            },
+            ["gss"] = {
+                pattern = ",",
+                operator_pending = false,
+                interactive = false,
+            },
+            ["gS"]  = {
+                pattern = ",",
+                operator_pending = true,
+                interactive = true,
+            },
+            ["gSS"] = {
+                pattern = ",",
+                operator_pending = false,
+                interactive = true,
+            },
+        },
+    
+        pattern_aliases = {
+            [","] = ",",
+            [";"] = ";",
+            [" "] = "%s+",
+            ["+"] = " [+-/%] ",
+            ["<"] = {
+                pattern = { "<[^=]", "<=", "==", ">[^=]", ">=" },
+                break_placement = "before_separator"
+            },
+            ["."] = {
+                pattern = "[%.?!]%s+",
+                unsplitter = " ",
+                smart_ignore = "code",
+                quote_characters = {},
+                brace_characters = {}
+            }
+        },
+        keymap_defaults = {
+            pattern = ",",
+            break_placement = "after_separator",
+            operator_pending = false,
+            transform_segments = make_transformer({
+                trim_l = { "before_separator", "on_separator", "after_separator" },
+                trim_r = { "before_separator", "on_separator", "after_separator" },
+            }),
+            transform_separators = make_transformer({
+                trim_l = { "before_separator" },
+                trim_r = { "before_separator", "after_separator" },
+                pad_r = { "before_separator" }
+            }),
+            indenter = require("split.indent").indent_equalprg,
+            unsplitter = nil,
+            interactive = false,
+            smart_ignore = "comments",
+            quote_characters = { left = { "'", '"', "`" }, right = { "'", '"', "`" } },
+            brace_characters = { left = { "(", "{", "[" }, right = { ")", "}", "]" } }
+        },
+    }
+<
 
 SplitConfig                                           *split.config.SplitConfig*
 
@@ -259,6 +302,7 @@ Config:get()                                                  *split.config:get*
 ==============================================================================
 Algorithm                                                      *split.algorithm*
 
+                                                      *split.algorithm.overview*
 The algorithm for splitting lines broadly consists of the following
 stages:
 
@@ -287,26 +331,6 @@ stages:
    new lines are added to the results.
 7. The new lines are inserted into the buffer.
 
-SplitType                                            *split.algorithm.SplitType*
-
-    Variants: ~
-        ("current_line")  Call is for the current line
-        ("line")          Call is in operator-pending `"line"` mode
-        ("block")         Currently just an alias for `"line"`
-        ("char")          Call is in operator-pending `"char"` mode
-
-
-SegSepPair                                          *split.algorithm.SegSepPair*
-    When a line is split, the result is an array where each element
-    conforms to this pattern.
-
-    Fields: ~
-        {seg} (string)
-            A portion of the line which wasn't matched by the pattern.
-        {sep?} (string)
-            A portion of the line which was matched by the provided pattern.
-
-
                                                    *split.algorithm.split_lines*
 M.split_lines({lines}, {opts}, {linenr?}, {bufnr?})
     Split text by inserting linebreaks
@@ -329,6 +353,17 @@ M.split_lines({lines}, {opts}, {linenr?}, {bufnr?})
 
     Returns: ~
         (SegSepPair[][])
+
+
+SegSepPair                                          *split.algorithm.SegSepPair*
+    When a line is split, the result is an array where each element
+    conforms to this pattern.
+
+    Fields: ~
+        {seg} (string)
+            A portion of the line which wasn't matched by the pattern.
+        {sep?} (string)
+            A portion of the line which was matched by the provided pattern.
 
 
 vim:tw=78:ts=8:noet:ft=help:norl:
