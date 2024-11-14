@@ -284,7 +284,6 @@ local Config = {
     },
 }
 
----@package
 ---@param cfg SplitConfigInput
 function Config:set(cfg)
     if cfg then

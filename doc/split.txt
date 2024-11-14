@@ -10,7 +10,7 @@
              \ \_\                                                   
               \/_/                                                   
 
-            · Break up long lines at the speed of thought ·
+       ·  A simple, powerful Neovim plugin for adding linebreaks ·    
 
 
 ==============================================================================
@@ -26,7 +26,7 @@ Algorithm ···································
 Introduction                                                        *split-nvim*
 
 split.nvim is a Neovim plugin for inserting linebreaks when lines of code
-get unweildy. Usually I use it for stuff like this:
+start to get too long. Usually I use it for stuff like this:
 
 >lua
     -- Initial text:
@@ -291,6 +291,12 @@ SplitConfig                                           *split.config.SplitConfig*
         {keymaps} (table<string,SplitOpts>)
         {pattern_aliases} (table<string,string|SplitOpts>)
         {keymap_defaults} (SplitOpts)
+
+
+Config:set({cfg})                                             *split.config:set*
+
+    Parameters: ~
+        {cfg} (SplitConfigInput)
 
 
 Config:get()                                                  *split.config:get*

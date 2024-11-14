@@ -1,3 +1,8 @@
+<h1 align="center">split.nvim</h1>
+<p align="center"><sup>⚡️ A simple, powerful Neovim plugin for adding linebreaks ⚡️</sup></p>
+
+
+
 TODO:
 
 ## Limitations
@@ -17,6 +22,8 @@ print(
 ````
 
 ```` lua
--- this, is
+-- this. is
 -- a, comment
+this. is. some. code.
+-- This. is. more.
 ````
