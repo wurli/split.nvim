@@ -2,12 +2,11 @@ local M = {}
 
 ---@param x any A value to search for
 ---@param list table A table of values to match against
----@return integer position The index of the found item, or -1 if not found
+---@return integer | nil # The index of the found item, or `nil` if not found
 function M.match(x, list)
     for i, el in ipairs(list) do
         if x == el then return i end
     end
-    return -1
 end
 
 -- Range a is smaller than range b if a starts on an earlier row,

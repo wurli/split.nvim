@@ -201,16 +201,16 @@ local make_transformer = function(tb)
     ---@param opts SplitOpts
     ---@return string
     return function(s, opts)
-        if utils.match(opts.break_placement, tb.trim_l or {}) ~= -1 then
+        if utils.match(opts.break_placement, tb.trim_l or {}) then
             s = s:gsub("^%s+", "")
         end
-        if utils.match(opts.break_placement, tb.trim_r or {}) ~= -1 then
+        if utils.match(opts.break_placement, tb.trim_r or {}) then
             s = s:gsub("%s*$", "")
         end
-        if utils.match(opts.break_placement, tb.pad_l or {}) ~= -1 then
+        if utils.match(opts.break_placement, tb.pad_l or {}) then
             s = " " .. s
         end
-        if utils.match(opts.break_placement, tb.pad_r or {}) ~= -1 then
+        if utils.match(opts.break_placement, tb.pad_r or {}) then
             s = s .. " "
         end
         return s

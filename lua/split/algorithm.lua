@@ -563,7 +563,7 @@ function M.get_enclosed_chunks(lines, left_braces, right_braces, ignore_ranges)
             local left_brace_type = utils.match(braces[i], left_braces)
             local right_brace_type = utils.match(braces[i + 1], right_braces)
 
-            if left_brace_type ~= -1 and right_brace_type ~= -1 and left_brace_type == right_brace_type then
+            if left_brace_type and right_brace_type and left_brace_type == right_brace_type then
                 has_brace_pair = true
                 table.insert(brace_pairs, {
                     brace_positions[i],
