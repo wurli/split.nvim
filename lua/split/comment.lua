@@ -49,6 +49,9 @@ function M.get_commentstring(ref_position)
     return ts_cs or buf_cs
 end
 
+---@param ref_position table
+---@param line string
+---@return { left: string, indent: string, right: string }
 function M.get_comment_parts(ref_position, line)
     line = line or vim.api.nvim_buf_get_lines(0, ref_position[1] - 1, ref_position[1], true)[1]
 
@@ -66,7 +69,7 @@ function M.get_comment_parts(ref_position, line)
     -- Structure of 'commentstring': <left part> <%s> <right part>
     local left, right = cs:match('^(.-)%%s(.-)$')
     left, right = vim.trim(left), vim.trim(right)
-    local indent = line:match("^%s*" .. vim.pesc(left) .. "(%s*)")
+    local indent = line:match("^%s*" .. vim.pesc(left) .. "(%s*)") or ""
 
     return { left = left, indent = indent, right = right }
 end
