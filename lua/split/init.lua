@@ -140,6 +140,7 @@ end
 function M.user_mapping(x)
     local opts = require("split.config"):get().keymaps[x]
     return function(type)
+        print(type)
         require("split.algorithm").split(type, opts)
     end
 end

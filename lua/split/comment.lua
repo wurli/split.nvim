@@ -138,8 +138,8 @@ end
 function M.make_uncomment_function(parts)
     local l_esc         = vim.pesc(parts.left)
     local r_esc         = vim.pesc(parts.right)
-    local regex         = '^(%s*)' .. l_esc           .. '(.*)' .. r_esc           .. '(%s-)$'
-    local regex_trimmed = '^(%s*)' .. vim.trim(l_esc) .. '(.*)' .. vim.trim(r_esc) .. '(%s-)$'
+    local regex         = '^(%s*)' .. l_esc           .. parts.indent .. '(.*)' .. r_esc           .. '(%s-)$'
+    local regex_trimmed = '^(%s*)' .. vim.trim(l_esc) .. parts.indent .. '(.*)' .. vim.trim(r_esc) .. '(%s-)$'
 
     return function(line)
         -- Try regex with exact comment parts first, fall back to trimmed parts

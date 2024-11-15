@@ -50,15 +50,15 @@ local M = {}
 ---The mode in which the function is called:
 ---| '"current_line"' # Call is for the current line
 ---| '"line"' # Call is in operator-pending `"line"` mode
----| '"block"' # Currently just an alias for `"line"`
+---| '"block"' # Currently just an alias for `"char"`
 ---| '"char"' # Call is in operator-pending `"char"` mode
 ---@param opts SplitOpts | nil 
 ---Additional options; see |split.config.SplitOpts| for more
 ---information.
 function M.split(type, opts)
     type           = type or "current_line"
-    -- 'block' selections not implemented (yet), so fall back to "line"
-    type           = type == "block" and "line" or type
+    -- 'block' selections not implemented (yet), so fall back to "char"
+    type           = type == "block" and "char" or type
     opts           = utils.tbl_copy(opts)
     local linewise = type == "current_line" or type == "line"
 
@@ -75,6 +75,8 @@ function M.split(type, opts)
     ---------------------------
     local range, lines
     if type == "current_line" then
+        -- Linewise doesn't set marks '[ and '], so need to get the text
+        -- using a different method
         local row = vim.api.nvim_win_get_cursor(0)[1] - 1
         range = { row, 0, row, -1 }
         lines = { vim.api.nvim_get_current_line() }
@@ -83,11 +85,23 @@ function M.split(type, opts)
         lines = utils.get_range_text(range, linewise)
     end
 
+    local start_line_full       = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
+    local end_line_full         = vim.api.nvim_buf_get_lines(0, range[3], range[3] + 1, true)[1]
+    local start_line_is_partial = #start_line_full ~= #lines[1]
+    local end_line_is_partial   = #end_line_full   ~= #lines[#lines]
+
 
     --------------------------------------------------------------------------
     -- Uncomment any commented lines, and make functions to re-comment them --
     --------------------------------------------------------------------------
-    local lines_uncommented, commented, commenters = M.uncomment_lines(lines, range)
+    local lines_uncommented, commented, commenters = M.uncomment_lines(
+        lines, range, start_line_full
+    )
+
+    local indents = {}
+    for _, line in pairs(lines_uncommented) do
+        table.insert(indents, line:match("^(%s+)") or "")
+    end
 
     -----------------------
     -- Perform the split --
@@ -112,37 +126,50 @@ function M.split(type, opts)
     ---------------------------------------------------------
     -- 'Unsplit' each chunk of commented/uncommented lines --
     ---------------------------------------------------------
+    local lines_unsplit = lines_recombined
     if opts.unsplitter then
-        lines_recombined, commenters = M.unsplit_lines(
-            lines_recombined, commented, commenters, opts
+        lines_unsplit, commenters, indents = M.unsplit_lines(
+            lines_recombined, commented, commenters, indents, opts
         )
     end
 
-    ---------------------------------------------------------
-    -- Insert trailing blank line if split is not linewise --
-    ---------------------------------------------------------
-    if not linewise then
-        table.insert(lines_recombined[#lines_recombined], "")
+    --------------
+    -- Reindent --
+    --------------
+    local lines_reindented = utils.tbl_copy(lines_unsplit)
+    for lnum, line in ipairs(lines_unsplit) do
+        if not commented[lnum] then
+            lines_reindented[lnum][1] = indents[lnum] .. line[1]
+        end
     end
 
     -----------------------------------
     -- Apply commenting to new lines --
     -----------------------------------
+    local lines_recommented = {}
     for lnum, commenter in ipairs(commenters) do
-        lines_recombined[lnum] = vim.tbl_map(commenter, lines_recombined[lnum])
+        lines_recommented[lnum] = vim.tbl_map(commenter, lines_reindented[lnum])
     end
 
     --------------------------------------------------------
     -- Insert leading blank line if split is not linewise --
     --------------------------------------------------------
+
+    local last_line = lines_recombined[#lines_recombined]
     if not linewise then
-        table.insert(lines_recombined, 1, { "" })
+        if start_line_is_partial then
+            table.insert(lines_recommented[1], 1, "")
+        end
+        local empty_comment = commenters[#commenters]("")
+        if end_line_is_partial and last_line[#last_line] ~= "" then
+            table.insert(lines_recommented[#lines_recommented], empty_comment)
+        end
     end
 
     ---------------------------------------
     -- Insert the new text in the buffer --
     ---------------------------------------
-    local lines_flat = vim.iter(lines_recombined):flatten(1):totable()
+    local lines_flat = vim.iter(lines_recommented):flatten(1):totable()
     utils.set_range_text(range, lines_flat, linewise)
 
     -----------------------
@@ -159,14 +186,14 @@ end
 ---@return string[]
 ---@return boolean[]
 ---@return function[]
-function M.uncomment_lines(lines, range)
+function M.uncomment_lines(lines, range, start_line_full)
     local commented = {}
     local commenters = {}
     for lnum, line in ipairs(lines) do
         if lnum == 1 then
             -- Need to make sure the first line contains the whole text as this
             -- is (usually) how we determine whether or not the line is a comment
-            line = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
+            line = start_line_full
         end
 
         local comment_parts = comment.get_comment_parts({ lnum + range[1], 0 }, line)
@@ -417,19 +444,23 @@ end
 ---  commented
 ---@param commenters function[] A table of functions which can be used to 
 ---  restore the commented status of the lines
+---@param indents string[]
 ---@param opts SplitOpts
 ---@return string[][]
 ---@return function[] # Functions which be used to comment the results later on
-function M.unsplit_lines(lines_recombined, commented, commenters, opts)
-    local lines_unsplit = { { } }
+---@return string[]
+function M.unsplit_lines(lines_recombined, commented, commenters, indents, opts)
+    local lines_unsplit = { { lines_recombined[1][1] } }
     local commenters_unsplit = { commenters[1] }
+    local indents_unsplit = { indents[1] }
+
     -- If the unsplitter matches the split pattern, it's safe to assume the
     -- user always wants the unsplitter to take precedence, i.e. they want the
     -- line to get unsplit, but not re-split again afterwards.
-    local pattern = type(opts.pattern) == "table" and opts.pattern or { opts.pattern }
+    local pattern        = type(opts.pattern) == "table" and opts.pattern or { opts.pattern }
     local always_unsplit = vim.iter(pattern):any(function(p) return opts.unsplitter:match(p) end)
     local comments_found = vim.iter(commented):any(function(x) return x end)
-    local code_found = vim.iter(commented):any(function(x) return not x end)
+    local code_found     = vim.iter(commented):any(function(x) return not x end)
 
     -- Collapse each chunk of commented/uncommented lines into single lines.
     local prev_line_commented = commented[1]
@@ -445,27 +476,26 @@ function M.unsplit_lines(lines_recombined, commented, commenters, opts)
             or (opts.smart_ignore == "code" and not curr_line_commented)
             or (opts.smart_ignore == "none" and false)
         )
+
         if curr_line_commented ~= prev_line_commented or is_smart_ignore then
             table.insert(lines_unsplit, line_parts)
             table.insert(commenters_unsplit, commenters[lnum])
+            table.insert(indents_unsplit, indents[lnum])
         else
+            ---@type string[]
             local line = lines_unsplit[#lines_unsplit]
 
-            if #line == 0 then
+            local unsplit_line = line[#line] .. opts.unsplitter .. line_parts[1]
+
+            -- If the unsplit line matches the original split pattern, then
+            -- conceptually we would want it to seem like the line then
+            -- gets split by the pattern again, i.e. that the split pattern
+            -- takes precedence. So in such cases we just don't unsplit
+            -- in the first place.
+            if #utils.gfind(unsplit_line, opts.pattern) > 0 and not always_unsplit then
                 table.insert(line, line_parts[1])
             else
-                local unsplit_line = line[#line] .. opts.unsplitter .. line_parts[1]
-
-                -- If the unsplit line matches the original split pattern, then
-                -- conceptually we would want it to seem like the line then
-                -- gets split by the pattern again, i.e. that the split pattern
-                -- takes precedence. So in such cases we just don't unsplit
-                -- in the first place.
-                if unsplit_line:match(opts.pattern) and not always_unsplit then
-                    table.insert(line, line_parts[1])
-                else
-                    line[#line] = unsplit_line
-                end
+                line[#line] = unsplit_line
             end
 
             for i = 2, #line_parts do table.insert(line, line_parts[i]) end
@@ -473,7 +503,7 @@ function M.unsplit_lines(lines_recombined, commented, commenters, opts)
         prev_line_commented = commented[lnum]
     end
 
-    return lines_unsplit, commenters_unsplit
+    return lines_unsplit, commenters_unsplit, indents_unsplit
 end
 
 ---@private

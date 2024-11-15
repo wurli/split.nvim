@@ -6,10 +6,14 @@ function M.indent_equalprg(m1, m2)
     -- the following line, but it breaks dot-repeat and I'm not sure why.
     -- Something to do with marks getting borked I think.
     -- vim.cmd((":lockmarks silent normal! g'%s=g'%s"):format(m1, m2))
+    local indentexpr = vim.opt.indentexpr:get()
+
+    if indentexpr == "" then
+        return
+    end
 
     local start_line = vim.api.nvim_buf_get_mark(0, m1)[1]
     local end_line   = vim.api.nvim_buf_get_mark(0, m2)[1]
-    local indentexpr = vim.opt.indentexpr:get()
     local lines      = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, true)
 
     for lnum, line in ipairs(lines) do
@@ -18,7 +22,8 @@ function M.indent_equalprg(m1, m2)
 
         if line:match("^%s*$") then
             lines[lnum] = ""
-        elseif indent then
+        -- indent = -1 means 'keep the current indent'
+        elseif indent and indent ~= -1 then
             lines[lnum] = string.rep(" ", indent) .. line:gsub("^%s+", "")
         end
     end
