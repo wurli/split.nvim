@@ -202,9 +202,9 @@ BreakPlacement                                     *split.config.BreakPlacement*
     Options for `break_placement`
 
     Variants: ~
-        ("after_separator")   Place the linbreak before the split pattern
-        ("before_separator")  Place the linebreak after the split pattern
-        ("on_separator")      Replace the split pattern with a linebreak
+        ("after_pattern")   Place the linbreak before the split pattern
+        ("before_pattern")  Place the linebreak after the split pattern
+        ("on_pattern")      Replace the split pattern with a linebreak
 
 
 SmartIgnore                                           *split.config.SmartIgnore*
@@ -252,7 +252,7 @@ The following gives the full default configuration for `split.nvim`:
             ["+"] = " [+-/%] ",
             ["<"] = {
                 pattern = { "<[^=]", "<=", "==", ">[^=]", ">=" },
-                break_placement = "before_separator"
+                break_placement = "before_pattern"
             },
             ["."] = {
                 pattern = "[%.?!]%s+",
@@ -267,13 +267,13 @@ The following gives the full default configuration for `split.nvim`:
             break_placement = "after_separator",
             operator_pending = false,
             transform_segments = make_transformer({
-                trim_l = { "before_separator", "on_separator", "after_separator" },
-                trim_r = { "before_separator", "on_separator", "after_separator" },
+                trim_l = { "before_pattern", "on_pattern", "after_pattern" },
+                trim_r = { "before_pattern", "on_pattern", "after_pattern" },
             }),
             transform_separators = make_transformer({
-                trim_l = { "before_separator" },
-                trim_r = { "before_separator", "after_separator" },
-                pad_r = { "before_separator" }
+                trim_l = { "before_pattern" },
+                trim_r = { "before_pattern", "after_pattern" },
+                pad_r = { "before_pattern" }
             }),
             indenter = require("split.indent").indent_equalprg,
             unsplitter = nil,
@@ -337,28 +337,24 @@ stages:
    new lines are added to the results.
 7. The new lines are inserted into the buffer.
 
-                                                   *split.algorithm.split_lines*
-M.split_lines({lines}, {opts}, {linenr?}, {bufnr?})
-    Split text by inserting linebreaks
+                                                         *split.algorithm.split*
+M.split({lines}, {start_line_full?}, {end_line_full?}, {range?}, {linewise?}, {opts})
+    Split text by a pattern
 
-    This is a low-level helper which may be of use to users with a
-    particularly adventurous spirit.
+    This is a low-level interface for the split.nvim algorithm. This may be
+    of interest to particularly brave users.
 
 
     Parameters: ~
-        {lines} (string[]) An array of lines to split
-        {opts} (SplitOpts) Additional options to use when performting the
-              split. See |split.config.SplitOpts| for more information.
-        {linenr?} (integer) Optionally the start line number, 1-indexed. If
-              supplied, this is used with tree-sitter to detect which of the
-              matches for `pattern` are commented. If not supplied it is assumed
-              that no lines are commented.
-        {bufnr?} (integer) Optionally the buffer the text is taken from;
-              used with tree-sitter to detect which of the matches for `pattern`
-              are commented. Defaults to the current buffer.
-
-    Returns: ~
-        (SegSepPair[][])
+        {lines} (string[]) Lines to split
+        {start_line_full?} (string) The complete text for line 1
+        {end_line_full?} (string) The complete text for the last line
+        {range?} (integer[]) The range over which the text is being split. Used
+              with treesitter to determine which portions are commented.
+        {linewise?} (boolean) Whether the text is being split in line mode.
+        {opts} (SplitOpts|nil)
+            Additional options; see |split.config.SplitOpts| for more
+            information.
 
 
 SegSepPair                                          *split.algorithm.SegSepPair*

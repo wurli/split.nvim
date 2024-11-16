@@ -72,9 +72,9 @@ function M.get_opts_interactive(opts)
     local selection = prompt(prompt_parts)
 
     local break_placement_opts = {
-        after_separator  = "before_separator",
-        before_separator = "on_separator",
-        on_separator     = "after_separator",
+        after_pattern  = "before_pattern",
+        before_pattern = "on_pattern",
+        on_pattern     = "after_pattern",
     }
 
     local cycle_break_placement = function(x)

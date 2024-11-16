@@ -1,5 +1,12 @@
 local M = {}
 
+function M.debug(msg, ...)
+    local args = { ... }
+    for k, a in pairs(args) do args[k] = vim.inspect(a) end
+    local text = msg:format(unpack(args))
+    return text
+end
+
 ---@param x any A value to search for
 ---@param list table A table of values to match against
 ---@return integer | nil # The index of the found item, or `nil` if not found

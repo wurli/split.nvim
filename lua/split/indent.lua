@@ -32,16 +32,6 @@ function M.indent_equalprg(m1, m2)
 end
 
 
--- vim.v.lnum = 15
--- print({
---     vim.api.nvim_command("echo nvim_treesitter#indent()")
--- })
-
--- vim.v.lnum = 20
--- print({
---     vim.api.nvim_command("echo GetLuaIndent()")
--- })
-
 function M.indent_lsp(m1, m2)
     vim.lsp.buf.format({
         range = {

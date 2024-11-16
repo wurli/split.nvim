@@ -44,24 +44,23 @@ local comment       = require("split.comment")
 local M = {}
 
 ---@private
----Split text by a pattern
----
 ---@param type?
 ---The mode in which the function is called:
 ---| '"current_line"' # Call is for the current line
 ---| '"line"' # Call is in operator-pending `"line"` mode
 ---| '"block"' # Currently just an alias for `"char"`
 ---| '"char"' # Call is in operator-pending `"char"` mode
----@param opts SplitOpts | nil 
----Additional options; see |split.config.SplitOpts| for more
----information.
-function M.split(type, opts)
+---@param opts? SplitOpts Options to use when splitting the text
+function M.split_in_buffer(type, opts)
+    opts           = opts or {}
     type           = type or "current_line"
     -- 'block' selections not implemented (yet), so fall back to "char"
     type           = type == "block" and "char" or type
-    opts           = utils.tbl_copy(opts)
     local linewise = type == "current_line" or type == "line"
 
+    ---------------------------------------------
+    -- Maybe prompt the user for split options --
+    ---------------------------------------------
     if opts.interactive then
         opts = interactivity.get_opts_interactive(opts)
     end
@@ -85,11 +84,49 @@ function M.split(type, opts)
         lines = utils.get_range_text(range, linewise)
     end
 
-    local start_line_full       = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
-    local end_line_full         = vim.api.nvim_buf_get_lines(0, range[3], range[3] + 1, true)[1]
+    local start_line_full = vim.api.nvim_buf_get_lines(0, range[1], range[1] + 1, true)[1]
+    local end_line_full   = vim.api.nvim_buf_get_lines(0, range[3], range[3] + 1, true)[1]
+
+    ----------------------------------
+    -- Split the lines by delimiter --
+    ----------------------------------
+    local new_lines = M.split(lines, start_line_full, end_line_full, range, linewise, opts)
+
+    ---------------------------------------
+    -- Insert the new text in the buffer --
+    ---------------------------------------
+    local lines_flat = vim.iter(new_lines):flatten(1):totable()
+    utils.set_range_text(range, lines_flat, linewise)
+
+    -----------------------
+    -- Apply indentation --
+    -----------------------
+    if opts.indenter then
+        opts.indenter("[", "]")
+    end
+end
+
+---Split text by a pattern
+---
+---This is a low-level interface for the split.nvim algorithm. This may be
+---of interest to particularly brave users.
+---
+---@param lines string[] Lines to split
+---@param start_line_full? string The complete text for line 1
+---@param end_line_full? string The complete text for the last line
+---@param range? integer[] The range over which the text is being split. Used
+---  with treesitter to determine which portions are commented.
+---@param linewise? boolean Whether the text is being split in line mode.
+---@param opts SplitOpts | nil 
+---Additional options; see |split.config.SplitOpts| for more
+---information.
+function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
+    start_line_full             = start_line_full or lines[1]
+    end_line_full               = end_line_full or lines[#lines]
     local start_line_is_partial = #start_line_full ~= #lines[1]
     local end_line_is_partial   = #end_line_full   ~= #lines[#lines]
-
+    if linewise == nil then linewise = true else linewise = false end
+    opts                        = utils.tbl_copy(opts)
 
     --------------------------------------------------------------------------
     -- Uncomment any commented lines, and make functions to re-comment them --
@@ -106,7 +143,7 @@ function M.split(type, opts)
     -----------------------
     -- Perform the split --
     -----------------------
-    local lines_split = M.split_lines(lines_uncommented, opts, range[1])
+    local lines_split = M.split_lines(lines_uncommented, opts, range and range[1])
 
     -----------------------------------------------
     -- Apply any transformations to split pieces --
@@ -151,38 +188,26 @@ function M.split(type, opts)
         lines_recommented[lnum] = vim.tbl_map(commenter, lines_reindented[lnum])
     end
 
-    --------------------------------------------------------
-    -- Insert leading blank line if split is not linewise --
-    --------------------------------------------------------
-
-    local last_line = lines_recombined[#lines_recombined]
+    -----------------------------------------------
+    -- Insert leading/trailing lines blank lines --
+    -----------------------------------------------
     if not linewise then
         if start_line_is_partial then
             table.insert(lines_recommented[1], 1, "")
         end
-        local empty_comment = commenters[#commenters]("")
+        local last_line = lines_recombined[#lines_recombined]
         if end_line_is_partial and last_line[#last_line] ~= "" then
-            table.insert(lines_recommented[#lines_recommented], empty_comment)
+            table.insert(lines_recommented[#lines_recommented], commenters[#commenters](""))
         end
     end
 
-    ---------------------------------------
-    -- Insert the new text in the buffer --
-    ---------------------------------------
-    local lines_flat = vim.iter(lines_recommented):flatten(1):totable()
-    utils.set_range_text(range, lines_flat, linewise)
-
-    -----------------------
-    -- Apply indentation --
-    -----------------------
-    if opts.indenter then
-        opts.indenter("[", "]")
-    end
+    return lines_recommented
 end
 
 ---@private
 ---@param lines string[]
----@param range integer[]
+---@param range? integer[]
+---@param start_line_full? string
 ---@return string[]
 ---@return boolean[]
 ---@return function[]
@@ -193,10 +218,16 @@ function M.uncomment_lines(lines, range, start_line_full)
         if lnum == 1 then
             -- Need to make sure the first line contains the whole text as this
             -- is (usually) how we determine whether or not the line is a comment
-            line = start_line_full
+            line = start_line_full or line
         end
 
-        local comment_parts = comment.get_comment_parts({ lnum + range[1], 0 }, line)
+        local comment_parts
+        if range then
+            comment_parts = comment.get_comment_parts({ lnum + range[1], 0 }, line)
+        else
+            comment_parts = comment.get_comment_parts({ 1, 0 }, line)
+        end
+
         local _, line_is_commented = comment.get_line_info(line, comment_parts)
         local commenter = function(x) return x end
 
@@ -213,10 +244,8 @@ function M.uncomment_lines(lines, range, start_line_full)
     return lines, commented, commenters
 end
 
+---@private
 ---Split text by inserting linebreaks
----
----This is a low-level helper which may be of use to users with a
----particularly adventurous spirit.
 ---
 ---@param lines string[] An array of lines to split
 ---@param opts SplitOpts Additional options to use when performting the
@@ -417,12 +446,15 @@ function M.recombine(text_split, break_placement)
         for lnum, segsep in pairs(line_parts) do
             lines[lnum] = (lines[lnum] or "") .. (segsep.seg or "")
 
-            if break_placement == "after_separator" then
+            if break_placement == "after_pattern" then
                 lines[lnum] = (lines[lnum] or "") .. (segsep.sep or "")
 
-            elseif break_placement == "before_separator" then
+            elseif break_placement == "before_pattern" then
                 lines[lnum + 1] = segsep.sep
             end
+
+            -- 'on_patern' case happens implicitly because the separator just
+            -- doesn't get inserted into the final result
         end
 
         table.insert(out, lines)
@@ -450,9 +482,9 @@ end
 ---@return function[] # Functions which be used to comment the results later on
 ---@return string[]
 function M.unsplit_lines(lines_recombined, commented, commenters, indents, opts)
-    local lines_unsplit = { { lines_recombined[1][1] } }
-    local commenters_unsplit = { commenters[1] }
-    local indents_unsplit = { indents[1] }
+    local lines_unsplit = {}
+    local commenters_unsplit = {}
+    local indents_unsplit = {}
 
     -- If the unsplitter matches the split pattern, it's safe to assume the
     -- user always wants the unsplitter to take precedence, i.e. they want the
@@ -477,15 +509,16 @@ function M.unsplit_lines(lines_recombined, commented, commenters, indents, opts)
             or (opts.smart_ignore == "none" and false)
         )
 
-        if curr_line_commented ~= prev_line_commented or is_smart_ignore then
+        local keep_current_linebreak = curr_line_commented ~= prev_line_commented or is_smart_ignore
+
+        if keep_current_linebreak or lnum == 1 then
             table.insert(lines_unsplit, line_parts)
             table.insert(commenters_unsplit, commenters[lnum])
             table.insert(indents_unsplit, indents[lnum])
         else
             ---@type string[]
-            local line = lines_unsplit[#lines_unsplit]
-
-            local unsplit_line = line[#line] .. opts.unsplitter .. line_parts[1]
+            local prev_line = lines_unsplit[#lines_unsplit]
+            local unsplit_line = prev_line[#prev_line] .. opts.unsplitter .. line_parts[1]
 
             -- If the unsplit line matches the original split pattern, then
             -- conceptually we would want it to seem like the line then
@@ -493,12 +526,12 @@ function M.unsplit_lines(lines_recombined, commented, commenters, indents, opts)
             -- takes precedence. So in such cases we just don't unsplit
             -- in the first place.
             if #utils.gfind(unsplit_line, opts.pattern) > 0 and not always_unsplit then
-                table.insert(line, line_parts[1])
+                table.insert(prev_line, line_parts[1])
             else
-                line[#line] = unsplit_line
+                prev_line[#prev_line] = unsplit_line
             end
 
-            for i = 2, #line_parts do table.insert(line, line_parts[i]) end
+            for i = 2, #line_parts do table.insert(prev_line, line_parts[i]) end
         end
         prev_line_commented = commented[lnum]
     end

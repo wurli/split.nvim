@@ -94,9 +94,9 @@ local utils = require("split.utils")
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---Options for `break_placement`
 ---@alias BreakPlacement
----| '"after_separator"' # Place the linbreak before the split pattern
----| '"before_separator"' # Place the linebreak after the split pattern
----| '"on_separator"' # Replace the split pattern with a linebreak
+---| '"after_pattern"' # Place the linbreak before the split pattern
+---| '"before_pattern"' # Place the linebreak after the split pattern
+---| '"on_pattern"' # Replace the split pattern with a linebreak
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -149,7 +149,7 @@ local utils = require("split.utils")
 ---            ["+"] = " [+-/%] ",
 ---            ["<"] = {
 ---                pattern = { "<[^=]", "<=", "==", ">[^=]", ">=" },
----                break_placement = "before_separator"
+---                break_placement = "before_pattern"
 ---            },
 ---            ["."] = {
 ---                pattern = "[%.?!]%s+",
@@ -164,13 +164,13 @@ local utils = require("split.utils")
 ---            break_placement = "after_separator",
 ---            operator_pending = false,
 ---            transform_segments = make_transformer({
----                trim_l = { "before_separator", "on_separator", "after_separator" },
----                trim_r = { "before_separator", "on_separator", "after_separator" },
+---                trim_l = { "before_pattern", "on_pattern", "after_pattern" },
+---                trim_r = { "before_pattern", "on_pattern", "after_pattern" },
 ---            }),
 ---            transform_separators = make_transformer({
----                trim_l = { "before_separator" },
----                trim_r = { "before_separator", "after_separator" },
----                pad_r = { "before_separator" }
+---                trim_l = { "before_pattern" },
+---                trim_r = { "before_pattern", "after_pattern" },
+---                pad_r = { "before_pattern" }
 ---            }),
 ---            indenter = require("split.indent").indent_equalprg,
 ---            unsplitter = nil,
@@ -251,7 +251,7 @@ local Config = {
             ["+"] = " [+-/%] ",
             ["<"] = {
                 pattern = { "<[^=]", "<=", "==", ">[^=]", ">=" },
-                break_placement = "before_separator"
+                break_placement = "before_pattern"
             },
             ["."] = {
                 pattern = "[%.?!]%s+",
@@ -263,16 +263,16 @@ local Config = {
         },
         keymap_defaults = {
             pattern = ",",
-            break_placement = "after_separator",
+            break_placement = "after_pattern",
             operator_pending = false,
             transform_segments = make_transformer({
-                trim_l = { "before_separator", "on_separator", "after_separator" },
-                trim_r = { "before_separator", "on_separator", "after_separator" },
+                trim_l = { "before_pattern", "on_pattern", "after_pattern" },
+                trim_r = { "before_pattern", "on_pattern", "after_pattern" },
             }),
             transform_separators = make_transformer({
-                trim_l = { "before_separator" },
-                trim_r = { "before_separator", "after_separator" },
-                pad_r = { "before_separator" }
+                trim_l = { "before_pattern" },
+                trim_r = { "before_pattern", "after_pattern" },
+                pad_r = { "before_pattern" }
             }),
             indenter = require("split.indent").indent_equalprg,
             unsplitter = nil,
