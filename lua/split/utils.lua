@@ -4,6 +4,7 @@ function M.debug(msg, ...)
     local args = { ... }
     for k, a in pairs(args) do args[k] = vim.inspect(a) end
     local text = msg:format(unpack(args))
+    print(text)
     return text
 end
 

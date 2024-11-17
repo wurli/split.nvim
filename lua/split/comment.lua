@@ -5,25 +5,30 @@ local M = {}
 --- Get 'commentstring' at cursor
 ---@param ref_position integer[]
 ---@return string
+---@return string
 function M.get_commentstring(ref_position)
     local buf_cs = vim.bo.commentstring
+    local buf_ft = vim.bo.filetype
 
     local ts_parser = vim.treesitter.get_parser(0, '', { error = false })
     if not ts_parser then
-        return buf_cs
+        return buf_cs, buf_ft
     end
+
 
     -- Try to get 'commentstring' associated with local tree-sitter language.
     -- This is useful for injected languages (like markdown with code blocks).
     local row, col = ref_position[1] - 1, ref_position[2]
     local ref_range = { row, col, row, col + 1 }
 
-    -- - Get 'commentstring' from the deepest LanguageTree which both contains
-    --   reference range and has valid 'commentstring' (meaning it has at least
-    --   one associated 'filetype' with valid 'commentstring').
-    --   In simple cases using `parser:language_for_range()` would be enough, but
-    --   it fails for languages without valid 'commentstring' (like 'comment').
-    local ts_cs, res_level = nil, 0
+    print("Ref range: " .. vim.inspect(ref_range))
+
+    -- Get 'commentstring' from the deepest LanguageTree which both contains
+    -- reference range and has valid 'commentstring' (meaning it has at least
+    -- one associated 'filetype' with valid 'commentstring').
+    -- In simple cases using `parser:language_for_range()` would be enough, but
+    -- it fails for languages without valid 'commentstring' (like 'comment').
+    local ts_cs, ts_ft, res_level = nil, nil, 0
 
     ---@param lang_tree vim.treesitter.LanguageTree
     local function traverse(lang_tree, level)
@@ -31,12 +36,23 @@ function M.get_commentstring(ref_position)
             return
         end
 
-        local lang = lang_tree:lang()
-        local filetypes = vim.treesitter.language.get_filetypes(lang)
-        for _, ft in ipairs(filetypes) do
-            local cur_cs = vim.filetype.get_option(ft, 'commentstring')
-            if cur_cs ~= '' and level > res_level then
-                ts_cs = cur_cs
+        local regions = lang_tree:included_regions()
+
+        local includes_range = vim.iter(regions):flatten(1):find(function(r)
+            local start_ok = r[1] < ref_range[1] or r[1] == ref_range[1] and r[2] <= ref_range[2]
+            local end_ok   = ref_range[3] < r[4] or ref_range[3] == r[4] and ref_range[4] <= r[5]
+            return start_ok and end_ok
+        end)
+
+        if includes_range then
+            local lang = lang_tree:lang()
+            local filetypes = vim.treesitter.language.get_filetypes(lang)
+            for _, ft in ipairs(filetypes) do
+                local cur_cs = vim.filetype.get_option(ft, 'commentstring')
+                if cur_cs ~= '' and level > res_level then
+                    ts_ft = ft
+                    ts_cs = cur_cs
+                end
             end
         end
 
@@ -46,28 +62,24 @@ function M.get_commentstring(ref_position)
     end
     traverse(ts_parser, 1)
 
-    return ts_cs or buf_cs
+    return ts_cs or buf_cs, (ts_ft or buf_ft):lower()
 end
 
----@param ref_position table
+---@param commentstring string
 ---@param line string
 ---@return { left: string, indent: string, right: string }
-function M.get_comment_parts(ref_position, line)
-    line = line or vim.api.nvim_buf_get_lines(0, ref_position[1] - 1, ref_position[1], true)[1]
-
-    local cs = M.get_commentstring(ref_position)
-
-    if cs == nil or cs == '' then
+function M.get_comment_parts(commentstring, line)
+    if commentstring == nil or commentstring == '' then
         vim.api.nvim_echo({ { "Option 'commentstring' is empty.", 'WarningMsg' } }, true, {})
         return { left = '', right = '' }
     end
 
-    if not (type(cs) == 'string' and cs:find('%%s') ~= nil) then
-        error(vim.inspect(cs) .. " is not a valid 'commentstring'.")
+    if not (type(commentstring) == 'string' and commentstring:find('%%s') ~= nil) then
+        error(vim.inspect(commentstring) .. " is not a valid 'commentstring'.")
     end
 
     -- Structure of 'commentstring': <left part> <%s> <right part>
-    local left, right = cs:match('^(.-)%%s(.-)$')
+    local left, right = commentstring:match('^(.-)%%s(.-)$')
     left, right = vim.trim(left), vim.trim(right)
     local indent = line:match("^%s*" .. vim.pesc(left) .. "(%s*)") or ""
 

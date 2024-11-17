@@ -38,19 +38,28 @@ local utils = require("split.utils")
 ---
 ---Where to place the linebreak in relation to the separator. By
 ---default the linebreak will be inserted after the separator, i.e.
----split pattern.
----@field break_placement? BreakPlacement
+---split pattern. You can specify both a default break placement and
+---a different option for other filetypes by using a table. I like
+---to do this for SQL, e.g. using:
+---`break_placement = { "after_pattern", sql = "before_pattern" }`
+---@field break_placement? BreakPlacement | table<BreakPlacement>
 ---
 ---Whether to enter operator-pending mode when the mapping is called
 ---@field operator_pending? boolean
 ---
 ---A function to be applied to each separator before the split text is
----recombined
----@field transform_separators? fun(x: string, opts: SplitOpts): string
+---recombined. This function will be passed the element being
+---transformed, the configuration for the current keymapping
+---(see |split.config.SplitOpts|), and information about the current
+---line (see |split.algorithm.LineInfo|)
+---@field transform_separators? fun(x: string, opts: SplitOpts, info: LineInfo): string
 ---
 ---A function to be applied to each segment before the split text is
----recombined
----@field transform_segments? fun(x: string, opts: SplitOpts): string
+---recombined. This function will be passed the element being
+---transformed, the configuration for the current keymapping
+---(see |split.config.SplitOpts|), and information about the current
+---line (see |split.algorithm.LineInfo|)
+---@field transform_segments? fun(x: string, opts: SplitOpts, info: LineInfo): string
 ---
 ---A function to reindent the text after it has been split. This will
 ---be passed the marks `"["` and `"]"`. Can be `nil` if no indentation
@@ -197,23 +206,24 @@ local utils = require("split.utils")
 
 ---@param tb { trim_l: BreakPlacement[], trim_r: BreakPlacement[], pad_l: BreakPlacement[], pad_r: BreakPlacement[] }
 local make_transformer = function(tb)
-    ---@param s string
+    ---@param x string
     ---@param opts SplitOpts
+    ---@param info LineInfo
     ---@return string
-    return function(s, opts)
-        if utils.match(opts.break_placement, tb.trim_l or {}) then
-            s = s:gsub("^%s+", "")
+    return function(x, opts, info)
+        if utils.match(info.break_placement, tb.trim_l or {}) then
+            x = x:gsub("^%s+", "")
         end
-        if utils.match(opts.break_placement, tb.trim_r or {}) then
-            s = s:gsub("%s*$", "")
+        if utils.match(info.break_placement, tb.trim_r or {}) then
+            x = x:gsub("%s*$", "")
         end
-        if utils.match(opts.break_placement, tb.pad_l or {}) then
-            s = " " .. s
+        if utils.match(info.break_placement, tb.pad_l or {}) then
+            x = " " .. x
         end
-        if utils.match(opts.break_placement, tb.pad_r or {}) then
-            s = s .. " "
+        if utils.match(info.break_placement, tb.pad_r or {}) then
+            x = x .. " "
         end
-        return s
+        return x
     end
 end
 
@@ -263,7 +273,10 @@ local Config = {
         },
         keymap_defaults = {
             pattern = ",",
-            break_placement = "after_pattern",
+            break_placement = {
+                "after_pattern",
+                sql = "before_pattern"
+            },
             operator_pending = false,
             transform_segments = make_transformer({
                 trim_l = { "before_pattern", "on_pattern", "after_pattern" },

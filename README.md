@@ -1,5 +1,5 @@
 <h1 align="center">split.nvim</h1>
-<p align="center"><sup>⚡️ A simple, powerful Neovim plugin for adding linebreaks ⚡️</sup></p>
+<p align="center">⚡️ A simple, powerful Neovim plugin for adding linebreaks ⚡️</p>
 
 <!-- TODO: add a demo gif -->
 
@@ -25,7 +25,7 @@ enhancements over this approach:
     your normal `==`, so spacing should end up the way _you_ like it.
 
 *   split.nvim makes it very easy to insert the linebreaks either before,
-    ater, or on the split pattern. Nice if you write SQL like a sane person.
+    after, or on the split pattern. Nice if you write SQL the right way.
 
 *   split.nvim intelligently inserts leading and trailing blank lines to the
     split region. It sounds annoying but it's honestly really good.
@@ -69,7 +69,7 @@ split.nvim supports a
 
 *   [splitjoin.vim](https://github.com/AndrewRadev/splitjoin.vim)
 
-*   [treesj](https://github.com/Wansmer/treesj)
+*   [TreeSJ](https://github.com/Wansmer/treesj)
 
 ## Limitations
 

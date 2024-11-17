@@ -1,7 +1,6 @@
 local utils         = require("split.utils")
 local interactivity = require("split.interactivity")
 local comment       = require("split.comment")
---
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@mod split.algorithm Algorithm
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -131,14 +130,20 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     --------------------------------------------------------------------------
     -- Uncomment any commented lines, and make functions to re-comment them --
     --------------------------------------------------------------------------
-    local lines_uncommented, commented, commenters = M.uncomment_lines(
-        lines, range, start_line_full
-    )
+    local lines_uncommented, lines_info = M.uncomment_lines(lines, range, start_line_full)
 
-    local indents = {}
-    for _, line in pairs(lines_uncommented) do
-        table.insert(indents, line:match("^(%s+)") or "")
+    --------------------------------------------------------
+    -- Calculate the break placement for individual lines --
+    --------------------------------------------------------
+    for _, info in pairs(lines_info) do
+        info.break_placement = type(opts.break_placement) == "string"
+            and opts.break_placement
+            or opts.break_placement[info.filetype]
+            or opts.break_placement[1]
+            or "after_pattern"
     end
+
+    utils.debug("Info: %s", lines_info)
 
     -----------------------
     -- Perform the split --
@@ -152,22 +157,21 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
         lines_split,
         opts.transform_segments,
         opts.transform_separators,
+        lines_info,
         opts
     )
 
     ----------------------------
     -- Recombine split pieces --
     ----------------------------
-    local lines_recombined = M.recombine(parts_transformed, opts.break_placement)
+    local lines_recombined = M.recombine(parts_transformed, lines_info)
 
     ---------------------------------------------------------
     -- 'Unsplit' each chunk of commented/uncommented lines --
     ---------------------------------------------------------
     local lines_unsplit = lines_recombined
     if opts.unsplitter then
-        lines_unsplit, commenters, indents = M.unsplit_lines(
-            lines_recombined, commented, commenters, indents, opts
-        )
+        lines_unsplit, lines_info = M.unsplit_lines(lines_recombined, lines_info, opts)
     end
 
     --------------
@@ -175,8 +179,9 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     --------------
     local lines_reindented = utils.tbl_copy(lines_unsplit)
     for lnum, line in ipairs(lines_unsplit) do
-        if not commented[lnum] then
-            lines_reindented[lnum][1] = indents[lnum] .. line[1]
+        local info = lines_info[lnum]
+        if not info.commented then
+            lines_reindented[lnum][1] = info.indent .. line[1]
         end
     end
 
@@ -184,8 +189,8 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     -- Apply commenting to new lines --
     -----------------------------------
     local lines_recommented = {}
-    for lnum, commenter in ipairs(commenters) do
-        lines_recommented[lnum] = vim.tbl_map(commenter, lines_reindented[lnum])
+    for lnum, info in ipairs(lines_info) do
+        lines_recommented[lnum] = vim.tbl_map(info.commenter, lines_reindented[lnum])
     end
 
     -----------------------------------------------
@@ -197,23 +202,43 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
         end
         local last_line = lines_recombined[#lines_recombined]
         if end_line_is_partial and last_line[#last_line] ~= "" then
-            table.insert(lines_recommented[#lines_recommented], commenters[#commenters](""))
+            table.insert(
+                lines_recommented[#lines_recommented],
+                lines_info[#lines_info].commenter("")
+            )
         end
     end
 
     return lines_recommented
 end
 
+---@class LineInfo
+---
+---Whether the line is commented
+---@field commented boolean 
+---
+---A function to recomment the line
+---@field commenter fun(s: string): string
+---
+---The filetype associated with the line
+---@field filetype string
+---
+---The break placement for the current line -
+---see |split.config.SplitOpts| for more information.
+---@field break_placement? BreakPlacement
+---
+---The amount of indent for the line. If the line is commented, this will be
+---the indent _after_ the comment string.
+---@field indent string 
+
 ---@private
 ---@param lines string[]
 ---@param range? integer[]
 ---@param start_line_full? string
----@return string[]
----@return boolean[]
----@return function[]
+---@return string[] # Uncommented lines
+---@return LineInfo[] # Extra information about each line
 function M.uncomment_lines(lines, range, start_line_full)
-    local commented = {}
-    local commenters = {}
+    local lines_info = {}
     for lnum, line in ipairs(lines) do
         if lnum == 1 then
             -- Need to make sure the first line contains the whole text as this
@@ -221,12 +246,9 @@ function M.uncomment_lines(lines, range, start_line_full)
             line = start_line_full or line
         end
 
-        local comment_parts
-        if range then
-            comment_parts = comment.get_comment_parts({ lnum + range[1], 0 }, line)
-        else
-            comment_parts = comment.get_comment_parts({ 1, 0 }, line)
-        end
+        local rng = range and { lnum + range[1], 0 } or { 1, 0 }
+        local commentstring, filetype = comment.get_commentstring(rng)
+        local comment_parts = comment.get_comment_parts(commentstring, line)
 
         local _, line_is_commented = comment.get_line_info(line, comment_parts)
         local commenter = function(x) return x end
@@ -237,11 +259,15 @@ function M.uncomment_lines(lines, range, start_line_full)
             lines[lnum] = uncommenter(lines[lnum])
         end
 
-        table.insert(commented, line_is_commented)
-        table.insert(commenters, commenter)
+        table.insert(lines_info, {
+            commented = line_is_commented,
+            commenter = commenter,
+            filetype = filetype,
+            indent = line:match("^(%s+)") or ""
+        })
     end
 
-    return lines, commented, commenters
+    return lines, lines_info
 end
 
 ---@private
@@ -393,71 +419,65 @@ end
 ---
 ---@private
 ---@param text_split SegSepPair[][]
----@param transform_segments fun(segment: string, otps: SplitOpts): string
----@param transform_separators fun(separator: string, otps: SplitOpts): string
+---@param transform_segments fun(segment: string, opts: SplitOpts, info: LineInfo): string
+---@param transform_separators fun(separator: string, opts: SplitOpts, info: LineInfo): string
+---@param info LineInfo[]
 ---@param opts SplitOpts
 ---@return SegSepPair[][]
-function M.transform(text_split, transform_segments, transform_separators, opts)
-    if transform_segments == nil and transform_separators == nil then
+function M.transform(text_split, transform_segments, transform_separators, info, opts)
+    if not transform_segments and not transform_separators then
         return text_split
     end
 
+    local msg = "Transformer should return a string, not a %s. Actual value returned: `%s`"
     local check = function(s)
         if type(s) ~= "string" then
-            error(("Transformer should return a string, not a %s. Actual value returned: `%s`"):format(
-                type(s),
-                vim.inspect(s)
-            ))
+            error(msg:format(type(s), vim.inspect(s)))
         end
         return s
     end
 
-    ---@param segsep SegSepPair
-    ---@return SegSepPair
-    local transform = function(segsep)
-        if transform_segments ~= nil and segsep.seg then
-            segsep.seg = check(transform_segments(segsep.seg, opts))
+    for lnum, line_parts in ipairs(text_split) do
+        local line_info = info[lnum]
+        for _, segsep in pairs(line_parts) do
+            if transform_segments and segsep.seg then
+                segsep.seg = check(transform_segments(segsep.seg, opts, line_info))
+            end
+            if transform_separators and segsep.sep then
+                segsep.sep = check(transform_separators(segsep.sep, opts, line_info))
+            end
         end
-        if transform_separators ~= nil and segsep.sep then
-            segsep.sep = check(transform_separators(segsep.sep, opts))
-        end
-        return segsep
     end
 
-    return vim.tbl_map(
-        function(line_parts) return vim.tbl_map(transform, line_parts) end,
-        text_split
-    )
+    return text_split
 end
-
-
 
 
 ---@private
 ---@param text_split SegSepPair[][]
----@param break_placement BreakPlacement
+---@param lines_info LineInfo[]
 ---@return string[][]
-function M.recombine(text_split, break_placement)
+function M.recombine(text_split, lines_info)
     local out = {}
 
-    for _, line_parts in pairs(text_split) do
-        local lines = { }
+    for lnum, line_parts in pairs(text_split) do
+        local info = lines_info[lnum]
+        local splits = { }
+        for splitnum, segsep in pairs(line_parts) do
+            splits[splitnum] = (splits[splitnum] or "") .. (segsep.seg or "")
 
-        for lnum, segsep in pairs(line_parts) do
-            lines[lnum] = (lines[lnum] or "") .. (segsep.seg or "")
+            if info.break_placement == "after_pattern" then
+                splits[splitnum] = (splits[splitnum] or "") .. (segsep.sep or "")
 
-            if break_placement == "after_pattern" then
-                lines[lnum] = (lines[lnum] or "") .. (segsep.sep or "")
-
-            elseif break_placement == "before_pattern" then
-                lines[lnum + 1] = segsep.sep
+            elseif info.break_placement == "before_pattern" then
+                splits[splitnum + 1] = segsep.sep
             end
 
-            -- 'on_patern' case happens implicitly because the separator just
+            -- 'on_pattern' case happens implicitly because the separator just
             -- doesn't get inserted into the final result
         end
 
-        table.insert(out, lines)
+        table.insert(out, splits)
     end
 
     return out
@@ -472,49 +492,40 @@ end
 ---@param lines_recombined string[][] Each element corresponds to one
 ---  of the original lines. Each sub-element corresponds to one of the new
 ---  lines.
----@param commented boolean[] Whether any of `lines_recombined` were originally
----  commented
----@param commenters function[] A table of functions which can be used to 
----  restore the commented status of the lines
----@param indents string[]
+---@param lines_info LineInfo[]
 ---@param opts SplitOpts
----@return string[][]
----@return function[] # Functions which be used to comment the results later on
----@return string[]
-function M.unsplit_lines(lines_recombined, commented, commenters, indents, opts)
-    local lines_unsplit = {}
-    local commenters_unsplit = {}
-    local indents_unsplit = {}
+---@return string[][] Lines
+---@return LineInfo[]
+function M.unsplit_lines(lines_recombined, lines_info, opts)
+    local lines_unsplit, info_unsplit = {}, {}
 
     -- If the unsplitter matches the split pattern, it's safe to assume the
     -- user always wants the unsplitter to take precedence, i.e. they want the
     -- line to get unsplit, but not re-split again afterwards.
     local pattern        = type(opts.pattern) == "table" and opts.pattern or { opts.pattern }
     local always_unsplit = vim.iter(pattern):any(function(p) return opts.unsplitter:match(p) end)
-    local comments_found = vim.iter(commented):any(function(x) return x end)
-    local code_found     = vim.iter(commented):any(function(x) return not x end)
+    local comments_found = vim.iter(lines_info):any(function(x) return x.commented end)
+    local code_found     = vim.iter(lines_info):any(function(x) return not x.commented end)
 
     -- Collapse each chunk of commented/uncommented lines into single lines.
-    local prev_line_commented = commented[1]
+    local prev_line_commented = lines_info[1].commented
     for lnum, line_parts in ipairs(lines_recombined) do
-        local curr_line_commented = commented[lnum]
+        local info = lines_info[lnum]
 
         -- Only unsplit if:
         -- * Current line is a comment and prev line isn't
         -- * Current line isn't a comment and previous line is
         -- * If lines are a mix of comments and code, then use 'smart_ignore'
         local is_smart_ignore = (comments_found and code_found) and (
-            (opts.smart_ignore == "comments" and curr_line_commented)
-            or (opts.smart_ignore == "code" and not curr_line_commented)
+            (opts.smart_ignore == "comments" and info.commented)
+            or (opts.smart_ignore == "code" and not info.commented)
             or (opts.smart_ignore == "none" and false)
         )
 
-        local keep_current_linebreak = curr_line_commented ~= prev_line_commented or is_smart_ignore
+        local keep_current_linebreak = info.commented ~= prev_line_commented or is_smart_ignore
 
         if keep_current_linebreak or lnum == 1 then
-            table.insert(lines_unsplit, line_parts)
-            table.insert(commenters_unsplit, commenters[lnum])
-            table.insert(indents_unsplit, indents[lnum])
+            table.insert(info_unsplit, info)
         else
             ---@type string[]
             local prev_line = lines_unsplit[#lines_unsplit]
@@ -533,10 +544,10 @@ function M.unsplit_lines(lines_recombined, commented, commenters, indents, opts)
 
             for i = 2, #line_parts do table.insert(prev_line, line_parts[i]) end
         end
-        prev_line_commented = commented[lnum]
+        prev_line_commented = info.commented
     end
 
-    return lines_unsplit, commenters_unsplit, indents_unsplit
+    return lines_unsplit, info_unsplit
 end
 
 ---@private
