@@ -143,8 +143,6 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
             or "after_pattern"
     end
 
-    utils.debug("Info: %s", lines_info)
-
     -----------------------
     -- Perform the split --
     -----------------------
