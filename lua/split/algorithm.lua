@@ -130,18 +130,7 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     --------------------------------------------------------------------------
     -- Uncomment any commented lines, and make functions to re-comment them --
     --------------------------------------------------------------------------
-    local lines_uncommented, lines_info = M.uncomment_lines(lines, range, start_line_full)
-
-    --------------------------------------------------------
-    -- Calculate the break placement for individual lines --
-    --------------------------------------------------------
-    for _, info in pairs(lines_info) do
-        info.break_placement = type(opts.break_placement) == "string"
-            and opts.break_placement
-            or opts.break_placement[info.filetype]
-            or opts.break_placement[1]
-            or "after_pattern"
-    end
+    local lines_uncommented, lines_info = M.uncomment_lines(lines, range, start_line_full, opts)
 
     -----------------------
     -- Perform the split --
@@ -210,6 +199,7 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     return lines_recommented
 end
 
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@class LineInfo
 ---
 ---Whether the line is commented
@@ -223,19 +213,23 @@ end
 ---
 ---The break placement for the current line -
 ---see |split.config.SplitOpts| for more information.
----@field break_placement? BreakPlacement
+---@field break_placement BreakPlacement
 ---
----The amount of indent for the line. If the line is commented, this will be
----the indent _after_ the comment string.
+---The amount of indent for the line. If the line is commented, this
+---will be the indent _after_ the comment string.
 ---@field indent string 
+--~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
 
 ---@private
 ---@param lines string[]
 ---@param range? integer[]
 ---@param start_line_full? string
+---@param opts SplitOpts
 ---@return string[] # Uncommented lines
 ---@return LineInfo[] # Extra information about each line
-function M.uncomment_lines(lines, range, start_line_full)
+function M.uncomment_lines(lines, range, start_line_full, opts)
     local lines_info = {}
     for lnum, line in ipairs(lines) do
         if lnum == 1 then
@@ -261,7 +255,16 @@ function M.uncomment_lines(lines, range, start_line_full)
             commented = line_is_commented,
             commenter = commenter,
             filetype = filetype,
-            indent = line:match("^(%s+)") or ""
+            indent = line:match("^(%s+)") or "",
+            -- We want the break placement for individual lines, as in rare
+            -- cases this will depend on file type. This can vary by line,
+            -- e.g. in the case of embedded code chunks within a markdown
+            -- block.
+            break_placement = type(opts.break_placement) == "string"
+                and opts.break_placement
+                or opts.break_placement[filetype]
+                or opts.break_placement[1]
+                or "after_pattern"
         })
     end
 

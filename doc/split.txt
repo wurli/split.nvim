@@ -332,13 +332,13 @@ LineInfo                                              *split.algorithm.LineInfo*
             A function to recomment the line
         {filetype} (string)
             The filetype associated with the line
-        {break_placement?} (BreakPlacement)
+        {break_placement} (BreakPlacement)
             The break placement for the current line -
             see |split.config.SplitOpts| for more information.
         {indent} (string)
 
-            The amount of indent for the line. If the line is commented, this will be
-            the indent _after_ the comment string.
+            The amount of indent for the line. If the line is commented, this
+            will be the indent _after_ the comment string.
 
 
 SegSepPair                                          *split.algorithm.SegSepPair*
