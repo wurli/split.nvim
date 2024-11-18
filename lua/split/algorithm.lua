@@ -18,10 +18,10 @@ local comment       = require("split.comment")
 ---   - Unless the user specifies otherwise, a split will not occur if
 ---     the pattern falls within a special range, e.g. a pair of quotes
 ---     or a pair of brackets.
----   - If some of the lines to be split are comments, none of these
+---   - If some of the lines to be split are comments, none of the commented
 ---     lines will be split. If all of the lines are commments, they will
 ---     be split as usual.
----   - Lines are uncommented so that the comment strings don't appear
+---   - Lines are uncommented so that comment strings don't appear
 ---     in the wrong places later.
 ---2. Line parts are transformed using the given transformation
 ---   functions. The default transformations involve removing
@@ -29,13 +29,13 @@ local comment       = require("split.comment")
 ---   the portions of the line matched by the provided pattern.
 ---3. The 'separator' and 'segment' portions of the original lines are
 ---   recombined pairwise to give the new lines.
----4. The newly constructed lines are 'unsplit', in effect replacing
----   the original linebreaks with a string provided by the user. Note
----   that here, linebreaks are only replaced within contiguous chunks
----   of commented/uncommented lines.
+---4. The newly constructed lines are 'unsplit', in effect removing the
+---    original linebreaks if a replacement string is provided by the user.
+---    Note that here, linebreaks are only replaced within contiguous chunks of
+---    commented/uncommented lines.
 ---5. Commenting is reapplied to the new lines.
----6. If the user called split.nvim within a line, leading and
----   new lines are added to the results.
+---6. If the user called split.nvim within a line, leading and new lines are
+---   added to the results if they don't already exist.
 ---7. The new lines are inserted into the buffer.
 ---@brief ]]
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
