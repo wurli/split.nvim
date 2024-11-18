@@ -524,7 +524,9 @@ function M.unsplit_lines(lines_recombined, lines_info, opts)
 
         local keep_current_linebreak = info.commented ~= prev_line_commented or is_smart_ignore
 
+
         if keep_current_linebreak or lnum == 1 then
+            table.insert(lines_unsplit, line_parts)
             table.insert(info_unsplit, info)
         else
             ---@type string[]

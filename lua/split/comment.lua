@@ -21,8 +21,6 @@ function M.get_commentstring(ref_position)
     local row, col = ref_position[1] - 1, ref_position[2]
     local ref_range = { row, col, row, col + 1 }
 
-    print("Ref range: " .. vim.inspect(ref_range))
-
     -- Get 'commentstring' from the deepest LanguageTree which both contains
     -- reference range and has valid 'commentstring' (meaning it has at least
     -- one associated 'filetype' with valid 'commentstring').
