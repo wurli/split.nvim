@@ -42,7 +42,7 @@ local utils = require("split.utils")
 ---a different option for other filetypes by using a table. I like
 ---to do this for SQL, e.g. using:
 ---`break_placement = { "after_pattern", sql = "before_pattern" }`
----@field break_placement? BreakPlacement | table<BreakPlacement>
+---@field break_placement? BreakPlacement | table<1 | string, BreakPlacement>
 ---
 ---Whether to enter operator-pending mode when the mapping is called
 ---@field operator_pending? boolean
