@@ -20,6 +20,7 @@ Introduction ·································�
 Usage ···························································· |split.usage|
 Interactivity ············································ |split.interactivity|
 Configuration ··················································· |split.config|
+Utilities ························································ |split.utils|
 Algorithm ···················································· |split.algorithm|
 
 ==============================================================================
@@ -135,7 +136,7 @@ SplitConfigInput                                 *split.config.SplitConfigInput*
         {keymaps?} (table<string,SplitOpts>)
             A table of keymappings. Table keys should give a keymapping to set,
             table values should be a subset of |split.config.SplitOpts|.
-        {pattern_aliases} (table<string,string|SplitOpts>)
+        {pattern_aliases?} (table<string,string|SplitOpts>)
             A table of aliases to use in interactive mode. Table keys give the
             alias, which should be a single character, and table values give
             the pattern to use when that character is entered by the user.
@@ -154,13 +155,13 @@ SplitOpts                                               *split.config.SplitOpts*
             The lua pattern to split on. Defaults to `","`. Multiple patterns
             can also be provided in a table if a single string doesn't give
             enough flexibility.
-        {break_placement?} (BreakPlacement|table<1|string,LineInfo>)
+        {break_placement?} (BreakPlacement|fun(ft:string,cmt:boolean):BreakPlacement)
             Where to place the linebreak in relation to the separator. By
             default the linebreak will be inserted after the separator, i.e.
-            split pattern. You can specify both a default break placement and
-            a different option for other filetypes by using a table. I like
-            to do this for SQL, e.g. using:
-            `break_placement = { "after_pattern", sql = "before_pattern" }`
+            split pattern. For fine-grained control you can pass a function
+            which accepts `ft`, the filetype of the line being split, and
+            `cmt`, whether the line being split is a comment. This function
+            should return one of the options given by |split.config.BreakPlacement|.
         {operator_pending?} (boolean)
             Whether to enter operator-pending mode when the mapping is called
         {transform_separators?} (fun(x:string,opts:SplitOpts,info:LineInfo):string)
@@ -175,12 +176,18 @@ SplitOpts                                               *split.config.SplitOpts*
             transformed, the configuration for the current keymapping
             (see |split.config.SplitOpts|), and information about the current
             line (see |split.algorithm.LineInfo|)
-        {indenter?} (fun(m1:string,m2:string))
-            A function to reindent the text after it has been split. This will
-            be passed the marks `"["` and `"]"`. Can be `nil` if no indentation
-            is desired. The default is to reindent using `=`, but you can set
-            this to indent using the active LSP's formatter by setting
-            `indenter = require("split.indent").indent_lsp`
+        {indenter?} (fun(range:integer[]))
+            The type of indentation to apply. This can be one of the following
+            options:
+             - `"equalprg"` to use the same indentation as <=>
+             - `"lsp"` to use your LSP server's indentation, if applicable
+               (note that some LSP servers will indent the whole file if this
+               option is set)
+             - A function that will be passed the range over which to apply the
+               indentation. This range will be in the form
+               `{start_row, start_col, end_row, end_col}`. Rows/cols are
+               (1, 0)-indexed
+             - `nil` to not apply indentation.
         {unsplitter?} (string|nil)
             A string that can be used to collapse lines into a single string
             before splitting. This can be helpful, e.g. if you want to
@@ -253,7 +260,6 @@ The following gives the full default configuration for `split.nvim`:
                 interactive = true,
             },
         },
-    
         pattern_aliases = {
             [","] = ",",
             [";"] = ";",
@@ -275,13 +281,13 @@ The following gives the full default configuration for `split.nvim`:
             pattern = ",",
             break_placement = "after_separator",
             operator_pending = false,
-            transform_segments = make_transformer({
+            transform_segments = require("split.utils").make_transformer({
                 trim_l = { "before_pattern", "on_pattern", "after_pattern" },
                 trim_r = { "before_pattern", "on_pattern", "after_pattern" },
             }),
-            transform_separators = make_transformer({
+            transform_separators = require("split.utils").make_transformer({
                 trim_l = { "before_pattern" },
-                trim_r = { "before_pattern", "after_pattern" },
+                trim_r = { "before_pattern", "on_pattern", "after_pattern" },
                 pad_r = { "before_pattern" }
             }),
             indenter = require("split.indent").indent_equalprg,
@@ -293,6 +299,8 @@ The following gives the full default configuration for `split.nvim`:
         },
     }
 <
+
+See also |split.utils.make_transformer|.
 
 SplitConfig                                           *split.config.SplitConfig*
 
@@ -312,6 +320,45 @@ Config:get()                                                  *split.config:get*
 
     Returns: ~
         (SplitConfig)
+
+
+==============================================================================
+Utilities                                                          *split.utils*
+
+M.make_transformer({tb})                          *split.utils.make_transformer*
+    Create a transformer function to apply to separators/segments
+
+    Usually the transformations you'll want to apply will involve adding or
+    removing leading/trailing whitespace, depending on where the linebreak sits
+    in relation to split pattern. This helper makes it easy to create such
+    functions. 
+
+
+    Parameters: ~
+        {tb} ({trim_l:BreakPlacement[],trim_r:BreakPlacement[],pad_l:BreakPlacement[],pad_r:BreakPlacement[]})
+
+    Usage: ~
+>lua
+        require("split").setup({
+            keymap_defaults = {
+                -- Always remove leading/trailing whitespace
+                transform_segments = require("split.utils").make_transformer({
+                    trim_l = { "before_pattern", "on_pattern", "after_pattern" },
+                    trim_r = { "before_pattern", "on_pattern", "after_pattern" },
+                }),
+                -- - Remove leading whitespace if the linebreak comes before the 
+                --   split pattern
+                -- - Always remove trailing whitespace
+                -- - Add leading whitespace if the linebreak comes before the
+                --   split pattern
+                transform_separators = require("split.utils").make_transformer({
+                    trim_l = { "before_pattern" },
+                    trim_r = { "before_pattern", "after_pattern" },
+                    pad_r = { "before_pattern" }
+                }),
+            }
+        })
+<
 
 
 ==============================================================================
@@ -351,7 +398,9 @@ M.split({lines}, {start_line_full?}, {end_line_full?}, {range?}, {linewise?}, {o
     Split text by a pattern
 
     This is a low-level interface for the split.nvim algorithm. This may be
-    of interest to particularly brave users.
+    of interest to particularly brave users. Note that this function doesn't
+    apply indentation to the result, since calculating indentation usually
+    requires the context of the surrounding text.
 
 
     Parameters: ~
@@ -365,12 +414,16 @@ M.split({lines}, {start_line_full?}, {end_line_full?}, {range?}, {linewise?}, {o
             Additional options; see |split.config.SplitOpts| for more
             information.
 
+    Returns: ~
+        (string[][])  A table where each element corresponds to one of
+              the original lines. Elements will themselves be arrays of strings, where
+              each string is a line of text in the result.
+
 
 LineInfo                                              *split.algorithm.LineInfo*
 
     Fields: ~
         {commented} (boolean)
-
             Whether the line is commented
         {commenter} (fun(s:string):string)
             A function to recomment the line
@@ -380,7 +433,6 @@ LineInfo                                              *split.algorithm.LineInfo*
             The break placement for the current line -
             see |split.config.SplitOpts| for more information.
         {indent} (string)
-
             The amount of indent for the line. If the line is commented, this
             will be the indent _after_ the comment string.
 

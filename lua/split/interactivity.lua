@@ -87,7 +87,9 @@ function M.get_opts_interactive(opts)
     while selection do
         if selection == "cycle_break_placement" then
             opts2.break_placement = cycle_break_placement(
-                opts2.break_placement or opts.break_placement
+                opts2.break_placement
+                    or (type(opts.break_placement) == "string" and opts.break_placement)
+                    or "after_pattern"
             )
             prompt_parts[2] = {
                 { " ", "Normal" },

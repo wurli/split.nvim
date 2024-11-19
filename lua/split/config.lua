@@ -19,7 +19,7 @@ local utils = require("split.utils")
 ---Alternatively you can specify a table of |split.config.SplitOpts|
 ---to further customise the behaviour of each alias.
 ---See |split.interactivity.default_aliases| for the default aliases.
----@field pattern_aliases table<string, string | SplitOpts>
+---@field pattern_aliases? table<string, string | SplitOpts>
 ---
 ---Options to use by default when setting keymaps.
 ---@field keymap_defaults? SplitOpts
@@ -38,11 +38,11 @@ local utils = require("split.utils")
 ---
 ---Where to place the linebreak in relation to the separator. By
 ---default the linebreak will be inserted after the separator, i.e.
----split pattern. You can specify both a default break placement and
----a different option for other filetypes by using a table. I like
----to do this for SQL, e.g. using:
----`break_placement = { "after_pattern", sql = "before_pattern" }`
----@field break_placement? BreakPlacement | table<1 | string, BreakPlacement>
+---split pattern. For fine-grained control you can pass a function
+---which accepts `ft`, the filetype of the line being split, and
+---`cmt`, whether the line being split is a comment. This function
+---should return one of the options given by |split.config.BreakPlacement|.
+---@field break_placement? BreakPlacement | fun(ft: string, cmt: boolean): BreakPlacement
 ---
 ---Whether to enter operator-pending mode when the mapping is called
 ---@field operator_pending? boolean
@@ -61,12 +61,18 @@ local utils = require("split.utils")
 ---line (see |split.algorithm.LineInfo|)
 ---@field transform_segments? fun(x: string, opts: SplitOpts, info: LineInfo): string
 ---
----A function to reindent the text after it has been split. This will
----be passed the marks `"["` and `"]"`. Can be `nil` if no indentation
----is desired. The default is to reindent using `=`, but you can set
----this to indent using the active LSP's formatter by setting
----`indenter = require("split.indent").indent_lsp`
----@field indenter? fun(m1: string, m2: string)
+---The type of indentation to apply. This can be one of the following
+---options:
+--- - `"equalprg"` to use the same indentation as <=>
+--- - `"lsp"` to use your LSP server's indentation, if applicable
+---   (note that some LSP servers will indent the whole file if this
+---   option is set)
+--- - A function that will be passed the range over which to apply the
+---   indentation. This range will be in the form 
+---   `{start_row, start_col, end_row, end_col}`. Rows/cols are
+---   (1, 0)-indexed
+--- - `nil` to not apply indentation.
+---@field indenter? fun(range: integer[])
 ---
 ---A string that can be used to collapse lines into a single string
 ---before splitting. This can be helpful, e.g. if you want to
@@ -150,7 +156,6 @@ local utils = require("split.utils")
 ---                interactive = true,
 ---            },
 ---        },
----    
 ---        pattern_aliases = {
 ---            [","] = ",",
 ---            [";"] = ";",
@@ -172,13 +177,13 @@ local utils = require("split.utils")
 ---            pattern = ",",
 ---            break_placement = "after_separator",
 ---            operator_pending = false,
----            transform_segments = make_transformer({
+---            transform_segments = require("split.utils").make_transformer({
 ---                trim_l = { "before_pattern", "on_pattern", "after_pattern" },
 ---                trim_r = { "before_pattern", "on_pattern", "after_pattern" },
 ---            }),
----            transform_separators = make_transformer({
+---            transform_separators = require("split.utils").make_transformer({
 ---                trim_l = { "before_pattern" },
----                trim_r = { "before_pattern", "after_pattern" },
+---                trim_r = { "before_pattern", "on_pattern", "after_pattern" },
 ---                pad_r = { "before_pattern" }
 ---            }),
 ---            indenter = require("split.indent").indent_equalprg,
@@ -190,6 +195,8 @@ local utils = require("split.utils")
 ---        },
 ---    }
 ---<
+---
+---See also |split.utils.make_transformer|.
 ---@brief ]]
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -201,32 +208,6 @@ local utils = require("split.utils")
 ---@field pattern_aliases table<string, string | SplitOpts>
 ---@field keymap_defaults SplitOpts
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-
----@param tb { trim_l: BreakPlacement[], trim_r: BreakPlacement[], pad_l: BreakPlacement[], pad_r: BreakPlacement[] }
-local make_transformer = function(tb)
-    ---@param x string
-    ---@param opts SplitOpts
-    ---@param info LineInfo
-    ---@return string
-    return function(x, opts, info)
-        if utils.match(info.break_placement, tb.trim_l or {}) then
-            x = x:gsub("^%s+", "")
-        end
-        if utils.match(info.break_placement, tb.trim_r or {}) then
-            x = x:gsub("%s*$", "")
-        end
-        if utils.match(info.break_placement, tb.pad_l or {}) then
-            x = " " .. x
-        end
-        if utils.match(info.break_placement, tb.pad_r or {}) then
-            x = x .. " "
-        end
-        return x
-    end
-end
-
 local Config = {
     state = {},
     ---@type SplitConfig
@@ -273,21 +254,18 @@ local Config = {
         },
         keymap_defaults = {
             pattern = ",",
-            break_placement = {
-                "after_pattern",
-                sql = "before_pattern"
-            },
+            break_placement = "before_pattern",
             operator_pending = false,
-            transform_segments = make_transformer({
+            transform_segments = utils.make_transformer({
                 trim_l = { "before_pattern", "on_pattern", "after_pattern" },
                 trim_r = { "before_pattern", "on_pattern", "after_pattern" },
             }),
-            transform_separators = make_transformer({
+            transform_separators = utils.make_transformer({
                 trim_l = { "before_pattern" },
-                trim_r = { "before_pattern", "after_pattern" },
+                trim_r = { "before_pattern", "on_pattern", "after_pattern" },
                 pad_r = { "before_pattern" }
             }),
-            indenter = require("split.indent").indent_equalprg,
+            indenter = require("split.indent").equalprg,
             unsplitter = nil,
             interactive = false,
             smart_ignore = "comments",

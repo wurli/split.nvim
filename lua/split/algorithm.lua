@@ -43,19 +43,19 @@ local comment       = require("split.comment")
 local M = {}
 
 ---@private
----@param type?
+---@param how?
 ---The mode in which the function is called:
 ---| '"current_line"' # Call is for the current line
 ---| '"line"' # Call is in operator-pending `"line"` mode
 ---| '"block"' # Currently just an alias for `"char"`
 ---| '"char"' # Call is in operator-pending `"char"` mode
 ---@param opts? SplitOpts Options to use when splitting the text
-function M.split_in_buffer(type, opts)
+function M.split_in_buffer(how, opts)
     opts           = opts or {}
-    type           = type or "current_line"
+    how            = how or "current_line"
     -- 'block' selections not implemented (yet), so fall back to "char"
-    type           = type == "block" and "char" or type
-    local linewise = type == "current_line" or type == "line"
+    how            = how == "block" and "char" or how
+    local linewise = how == "current_line" or how == "line"
 
     ---------------------------------------------
     -- Maybe prompt the user for split options --
@@ -72,7 +72,7 @@ function M.split_in_buffer(type, opts)
     -- Get the text to split --
     ---------------------------
     local range, lines
-    if type == "current_line" then
+    if how == "current_line" then
         -- Linewise doesn't set marks '[ and '], so need to get the text
         -- using a different method
         local row = vim.api.nvim_win_get_cursor(0)[1] - 1
@@ -95,20 +95,25 @@ function M.split_in_buffer(type, opts)
     -- Insert the new text in the buffer --
     ---------------------------------------
     local lines_flat = vim.iter(new_lines):flatten(1):totable()
-    utils.set_range_text(range, lines_flat, linewise)
+    local new_range = utils.set_range_text(range, lines_flat, linewise)
 
     -----------------------
     -- Apply indentation --
     -----------------------
-    if opts.indenter then
-        opts.indenter("[", "]")
+    if type(opts.indenter) == "string" then
+        local indenter = require("split.indent")[opts.indenter]
+        if indenter then indenter(new_range) end
+    elseif type(opts.indenter) == "function" then
+        opts.indenter(new_range)
     end
 end
 
 ---Split text by a pattern
 ---
 ---This is a low-level interface for the split.nvim algorithm. This may be
----of interest to particularly brave users.
+---of interest to particularly brave users. Note that this function doesn't
+---apply indentation to the result, since calculating indentation usually
+---requires the context of the surrounding text.
 ---
 ---@param lines string[] Lines to split
 ---@param start_line_full? string The complete text for line 1
@@ -119,6 +124,9 @@ end
 ---@param opts SplitOpts | nil 
 ---Additional options; see |split.config.SplitOpts| for more
 ---information.
+---@return string[][] # A table where each element corresponds to one of
+---  the original lines. Elements will themselves be arrays of strings, where
+---  each string is a line of text in the result.
 function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     start_line_full             = start_line_full or lines[1]
     end_line_full               = end_line_full or lines[#lines]
@@ -199,11 +207,12 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     return lines_recommented
 end
 
+
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@class LineInfo
 ---
 ---Whether the line is commented
----@field commented boolean 
+---@field commented boolean
 ---
 ---A function to recomment the line
 ---@field commenter fun(s: string): string
@@ -217,7 +226,7 @@ end
 ---
 ---The amount of indent for the line. If the line is commented, this
 ---will be the indent _after_ the comment string.
----@field indent string 
+---@field indent string
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -260,10 +269,8 @@ function M.uncomment_lines(lines, range, start_line_full, opts)
             -- cases this will depend on file type. This can vary by line,
             -- e.g. in the case of embedded code chunks within a markdown
             -- block.
-            break_placement = type(opts.break_placement) == "string"
-                and opts.break_placement
-                or opts.break_placement[filetype]
-                or opts.break_placement[1]
+            break_placement = (type(opts.break_placement) == "string" and opts.break_placement)
+                or (type(opts.break_placement) == "function" and opts.break_placement(filetype, line_is_commented))
                 or "after_pattern"
         })
     end
@@ -391,8 +398,8 @@ function M.split_lines(lines, opts, linenr, bufnr)
         local segment_sep_pairs = {}
         for _, m in pairs(segments) do
             table.insert(segment_sep_pairs, {
-                seg = m[1] and m[2] and line:sub(m[1], m[2]),
-                sep = m[3] and m[4] and line:sub(m[3], m[4])
+                seg = m[1] and m[2] and m[1] <= m[2] and line:sub(m[1], m[2]) or nil,
+                sep = m[3] and m[4] and m[3] <= m[4] and line:sub(m[3], m[4]) or nil,
             })
         end
 
@@ -413,7 +420,6 @@ end
 ---A portion of the line which was matched by the provided pattern.
 ---@field sep? string
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 
 
 --- Apply transformations to segments/separators before recombining
@@ -461,24 +467,28 @@ end
 function M.recombine(text_split, lines_info)
     local out = {}
 
-    for lnum, line_parts in pairs(text_split) do
-        local info = lines_info[lnum]
-        local splits = { }
-        for splitnum, segsep in pairs(line_parts) do
-            splits[splitnum] = (splits[splitnum] or "") .. (segsep.seg or "")
+    for lnum, splits in ipairs(text_split) do
+        local placement = lines_info[lnum].break_placement
+        local new_splits = {}
 
-            if info.break_placement == "after_pattern" then
-                splits[splitnum] = (splits[splitnum] or "") .. (segsep.sep or "")
+        for i = 1, #splits do
+            if not splits[1].seg then i = i + 1 end
+            local new_segsep, curr, prev = {}, splits[i], splits[i - 1]
 
-            elseif info.break_placement == "before_pattern" then
-                splits[splitnum + 1] = segsep.sep
+            if placement == "after_pattern" then
+                if curr then table.insert(new_segsep, curr.seg) end
+                if curr then table.insert(new_segsep, curr.sep) end
+            elseif placement == "before_pattern" then
+                if prev then table.insert(new_segsep, prev.sep) end
+                if curr then table.insert(new_segsep, curr.seg) end
+            elseif placement == "on_pattern" then
+                if curr then table.insert(new_segsep, curr.seg) end
             end
 
-            -- 'on_pattern' case happens implicitly because the separator just
-            -- doesn't get inserted into the final result
+            table.insert(new_splits, table.concat(new_segsep))
         end
 
-        table.insert(out, splits)
+        table.insert(out, new_splits)
     end
 
     return out

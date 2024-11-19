@@ -1,7 +1,7 @@
 local M = {}
 
 -- Theoretically does the same thing as running `=` between marks m1 and m2.
-function M.indent_equalprg(m1, m2)
+function M.equalprg(range)
     -- NB in theory this whole function could be as simple as just executing
     -- the following line, but it breaks dot-repeat and I'm not sure why.
     -- Something to do with marks getting borked I think.
@@ -12,8 +12,8 @@ function M.indent_equalprg(m1, m2)
         return
     end
 
-    local start_line = vim.api.nvim_buf_get_mark(0, m1)[1]
-    local end_line   = vim.api.nvim_buf_get_mark(0, m2)[1]
+    local start_line = range[1]
+    local end_line   = range[3]
     local lines      = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, true)
 
     for lnum, line in ipairs(lines) do
@@ -32,11 +32,11 @@ function M.indent_equalprg(m1, m2)
 end
 
 
-function M.indent_lsp(m1, m2)
+function M.lsp(range)
     vim.lsp.buf.format({
         range = {
-            ["start"] = vim.api.nvim_buf_get_mark(0, m1),
-            ["end"] = vim.api.nvim_buf_get_mark(0, m2),
+            ["start"] = { range[1], range[2] },
+            ["end"] = { range[3], range[4] }
         }
     })
 end
