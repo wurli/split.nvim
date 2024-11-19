@@ -1,49 +1,39 @@
 <h1 align="center">split.nvim</h1>
 <p align="center">⚡️ A simple, powerful Neovim plugin for adding linebreaks ⚡️</p>
 
-<!-- TODO: add a demo gif -->
-
-``` sql
--- hello, there, jacob
-select foo, bar, baz
-from tb
-```
+![](demo.gif)
 
 split.nvim is a plugin which adds linebreaks to your code based on one or more
 Lua patterns. Patterns may be simple like `","` to split text by commas, or
 more complicated like `"[%.?!]%s+"` to split text so each sentence ends up on
 its own line.
 
-Why not use a simple find-and-replace? Great question! split.nvim offers several
-enhancements over this approach:
+### Features:
 
-*   split.nvim won't insert breaks within common text objects like `()`, `{}`,
-    `""`, etc. This means your code is _much_ less likely to get completely
-    borked by the operation.
+*   **Automatic indentation** applied to the split region. This is the same
+    indentation used by your normal `==`, so spacing should end up the way
+    _you_ like it.
 
-*   split.nvim is aware of comments. If the region you're splitting over
-    contains both commented and uncommented code, splits won't get added within
-    the comments (this is configurable). This also significantly decreases the
-    bork-factor during splitting.
+*   **Awareness of common text objects** like `()`, `{}`, `""`, etc. This means
+    your code is _much_ less likely to get completely borked by the operation.
 
-*   split.nvim will (by default) automatically apply indentation to the split
-    region after inserting linebreaks. This is the same indentation used by
-    your normal `==`, so spacing should end up the way _you_ like it.
+*   **Comment awareness**. If the region you're splitting over contains both
+    commented and uncommented code, splits won't get added within the comments
+    (this is configurable). This also significantly decreases the bork-factor
+    during splitting.
 
-*   split.nvim makes it very easy to insert the linebreaks either before,
-    after, or on the split pattern. Nice if you write SQL the right way.
+*   split.nvim makes it very easy to **insert the linebreaks either before,
+    after, or on the split pattern**. Nice if you write SQL the right way.
 
-*   split.nvim intelligently inserts leading and trailing blank lines to the
-    split region. It sounds annoying but it's honestly really good.
+*   **Operator-pending mode and dot-repeat**.
 
-*   split.nvim supports (and encourages!) operator-pending mode and dot-repeat.
-
-*   split.nvim supports an [interactive mode](link here) so you don't need
-    to set a million keymaps to get fine-grained control.
+*   An [**interactive mode**](#-interactive-mode) so you don't need to set a
+    million keymaps to get fine-grained control.
 
 These features all combine to give a simple, powerful tool which integrates
-very nicely with Neovim's existing set of text manipulation keymappings. Not
-convinced? Give it a try! It's a classic green eggs and ham plugin.
+very nicely with Neovim's existing set of text manipulation keymappings
+(especially `J` and `gJ`). Not convinced? Give it a try! It's a classic green
+eggs and ham plugin.
 
 ## Installation
 
@@ -155,7 +145,6 @@ a quick example to whet your appetite:
 }
 ```
 
-
 ## Interactive mode
 
 When split.nvim is called in interactive mode, the user will be prompted to
@@ -175,14 +164,24 @@ keys specified by `config.interactive_options`. These are the options
 you get out of the box:
 
 *    `","`: Split on commas.
+
 *    `";"`: Split on semicolons.
+
 *    `" "`: Split on one or more whitespace characters.
+
 *    `"+"`: Split on `+`, `-`, `/`, and `%`, provided these are surrounded by
-    one or more whitespace characters.
+            one or more whitespace characters.
+
 *    `"<"`: Split by `<`, `<=`, `==`, `>`, or `>=`.
+
 *    `"."`: Split text so that each sentence occupies a single line.
 
 ## Similar work
+
+There are a few other plugins that offer similar functionality, although the
+implementations are very different. From what I can tell, split.nvim is unique
+in allowing you to specify generic _patterns_ to split on rather than text
+objects for a given language.
 
 *   [splitjoin.nvim](https://github.com/bennypowers/splitjoin.nvim)
 
