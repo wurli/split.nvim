@@ -47,7 +47,7 @@ you can install it using Lazy:
         keymaps = {
             -- Other keymaps are available :) these ones will be used
             -- by default.
-            ["gs"]  = {
+            ["gs"] = {
                 pattern = ",",
                 operator_pending = true,
                 interactive = false,
@@ -57,7 +57,7 @@ you can install it using Lazy:
                 operator_pending = false,
                 interactive = false,
             },
-            ["gS"]  = {
+            ["gS"] = {
                 pattern = ",",
                 operator_pending = true,
                 interactive = true,

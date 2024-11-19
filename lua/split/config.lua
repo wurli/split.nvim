@@ -175,7 +175,7 @@ local utils = require("split.utils")
 ---        },
 ---        keymap_defaults = {
 ---            pattern = ",",
----            break_placement = "after_separator",
+---            break_placement = "after_pattern",
 ---            operator_pending = false,
 ---            transform_segments = require("split.utils").make_transformer({
 ---                trim_l = { "before_pattern", "on_pattern", "after_pattern" },
@@ -253,7 +253,7 @@ local Config = {
         },
         keymap_defaults = {
             pattern = ",",
-            break_placement = "before_pattern",
+            break_placement = "after_pattern",
             operator_pending = false,
             transform_segments = utils.make_transformer({
                 trim_l = { "before_pattern", "on_pattern", "after_pattern" },
