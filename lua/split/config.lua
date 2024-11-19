@@ -19,7 +19,7 @@ local utils = require("split.utils")
 ---Alternatively you can specify a table of |split.config.SplitOpts|
 ---to further customise the behaviour of each alias.
 ---See |split.interactivity.default_aliases| for the default aliases.
----@field pattern_aliases? table<string, string | SplitOpts>
+---@field interactive_options? table<string, string | SplitOpts>
 ---
 ---Options to use by default when setting keymaps.
 ---@field keymap_defaults? SplitOpts
@@ -36,13 +36,12 @@ local utils = require("split.utils")
 ---enough flexibility.
 ---@field pattern? string | string[]
 ---
----Where to place the linebreak in relation to the separator. By
----default the linebreak will be inserted after the separator, i.e.
----split pattern. For fine-grained control you can pass a function
----which accepts `ft`, the filetype of the line being split, and
----`cmt`, whether the line being split is a comment. This function
----should return one of the options given by |split.config.BreakPlacement|.
----@field break_placement? BreakPlacement | fun(ft: string, cmt: boolean): BreakPlacement
+---Where to place the linebreak in relation to the split pattern. By
+---default the linebreak will be inserted after the pattern. For
+---fine-grained control you can pass a function which
+---accepts |split.algorithm.LineInfo| and |split.config.SplitOpts|.
+---This function should return one of |split.config.BreakPlacement|.
+---@field break_placement? BreakPlacement | fun(line_info: LineInfo, opts: SplitOpts): BreakPlacement
 ---
 ---Whether to enter operator-pending mode when the mapping is called
 ---@field operator_pending? boolean
@@ -63,16 +62,17 @@ local utils = require("split.utils")
 ---
 ---The type of indentation to apply. This can be one of the following
 ---options:
---- - `"equalprg"` to use the same indentation as <=>
+--- - `"equalprg"` to use the same indentation as <=>. This is the 
+---   default option.
 --- - `"lsp"` to use your LSP server's indentation, if applicable
 ---   (note that some LSP servers will indent the whole file if this
 ---   option is set)
 --- - A function that will be passed the range over which to apply the
 ---   indentation. This range will be in the form 
 ---   `{start_row, start_col, end_row, end_col}`. Rows/cols are
----   (1, 0)-indexed
---- - `nil` to not apply indentation.
----@field indenter? fun(range: integer[])
+---   (1, 0)-indexed.
+--- - `"none"` to not apply indentation.
+---@field indenter? '"equalprg"' | '"lsp"' | '"none"' | fun(range: integer[])
 ---
 ---A string that can be used to collapse lines into a single string
 ---before splitting. This can be helpful, e.g. if you want to
@@ -156,7 +156,7 @@ local utils = require("split.utils")
 ---                interactive = true,
 ---            },
 ---        },
----        pattern_aliases = {
+---        interactive_options = {
 ---            [","] = ",",
 ---            [";"] = ";",
 ---            [" "] = "%s+",
@@ -186,7 +186,7 @@ local utils = require("split.utils")
 ---                trim_r = { "before_pattern", "on_pattern", "after_pattern" },
 ---                pad_r = { "before_pattern" }
 ---            }),
----            indenter = require("split.indent").indent_equalprg,
+---            indenter = "equalprg",
 ---            unsplitter = nil,
 ---            interactive = false,
 ---            smart_ignore = "comments",
@@ -205,7 +205,7 @@ local utils = require("split.utils")
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@class SplitConfig
 ---@field keymaps table<string, SplitOpts>
----@field pattern_aliases table<string, string | SplitOpts>
+---@field interactive_options table<string, string | SplitOpts>
 ---@field keymap_defaults SplitOpts
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 local Config = {
@@ -234,8 +234,7 @@ local Config = {
                 interactive = true,
             },
         },
-
-        pattern_aliases = {
+        interactive_options = {
             [","] = ",",
             [";"] = ";",
             [" "] = "%s+",
@@ -265,7 +264,7 @@ local Config = {
                 trim_r = { "before_pattern", "on_pattern", "after_pattern" },
                 pad_r = { "before_pattern" }
             }),
-            indenter = require("split.indent").equalprg,
+            indenter = "equalprg",
             unsplitter = nil,
             interactive = false,
             smart_ignore = "comments",

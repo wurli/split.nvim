@@ -92,47 +92,37 @@ a quick example to whet your appetite:
 ``` lua
 {
     keymaps = {
+        -- Here, gs and gss give a mapping to split lines by commas and
+        -- semicolons. This doesn't enter interactive mode.
         ["gs"]  = {
-            pattern = ",",
+            pattern = "[,;]",
             operator_pending = true,
-            interactive = false,
         },
         ["gss"] = {
-            pattern = ",",
+            pattern = "[,;]",
             operator_pending = false,
-            interactive = false,
         },
-        ["gS"]  = {
-            pattern = ",",
-            operator_pending = true,
+        -- Here, gS and gSS give a mapping to enter interactive split mode...
+        ["gS"] = {
             interactive = true,
+            operator_pending = true,
         },
         ["gSS"] = {
-            pattern = ",",
-            operator_pending = false,
             interactive = true,
+            operator_pending = false,
         },
     },
-    pattern_aliases = {
-        [","] = ",",
-        [";"] = ";",
-        [" "] = "%s+",
-        ["+"] = " [+-/%] ",
-        ["<"] = {
-            pattern = { "<[^=]", "<=", "==", ">[^=]", ">=" },
-            break_placement = "before_pattern"
-        },
-        ["."] = {
-            pattern = "[%.?!]%s+",
-            unsplitter = " ",
-            smart_ignore = "code",
-            quote_characters = {},
-            brace_characters = {}
-        },
+    interactive_options = {
+        -- In interactive mode, the user can press ',' to split by commas
+        -- and semicolons, or '|' to split by the pipe operator. The
+        -- pipe operator pattern also checks if the current line is an
+        -- uncommented OCaml line, and if so, puts the pipe at the
+        -- start of the line.
+        [","] = "[,;]",
         ["|"] = {
             pattern = { "|>", "%%>%%" },
-            break_placement = function(ft, cmt)
-                if ft == "ml" and not cmt then
+            break_placement = function(line_info, opts)
+                if line_info.filetype == "ocaml" and not line_info.comment then
                     return "before_pattern"
                 end
                 return "after_pattern"
@@ -140,33 +130,57 @@ a quick example to whet your appetite:
         }
     },
     keymap_defaults = {
-        pattern = ",",
-        break_placement = {
-            "after_pattern",
-            sql = "before_pattern"
-        },
-        operator_pending = false,
-        transform_segments = make_transformer({
-            trim_l = { "before_pattern", "on_pattern", "after_pattern" },
-            trim_r = { "before_pattern", "on_pattern", "after_pattern" },
-        }),
-        transform_separators = make_transformer({
-            trim_l = { "before_pattern" },
-            trim_r = { "before_pattern", "after_pattern" },
-            pad_r = { "before_pattern" }
-        }),
-        indenter = require("split.indent").indent_equalprg,
-        unsplitter = nil,
-        interactive = false,
-        smart_ignore = "comments",
-        quote_characters = { left = { "'", '"', "`" }, right = { "'", '"', "`" } },
-        brace_characters = { left = { "(", "{", "[" }, right = { ")", "}", "]" } }
+        -- We can also override the plugin defaults for mappings. For
+        -- example, this option specifies that if we're writing SQL,
+        -- we should put the split pattern at the start of each line
+        -- unless we're writing a comment, e.g. for those who style
+        -- their SQL like this (the right way):
+        --
+        --     -- Before splitting
+        --     select foo, bar, baz
+        --     from table
+        --
+        --     -- After splitting
+        --     select foo
+        --     , bar
+        --     , baz
+        --     from table
+        break_placement = function(line_info, opts)
+            if line_info.filetype == "sql" and not line_info.comment then
+                return "before_pattern"
+            end
+            return "after_pattern"
+        end
     },
 }
 ```
 
 
 ## Interactive mode
+
+When split.nvim is called in interactive mode, the user will be prompted to
+enter options to perform the split. In this mode, special keys are used to
+enter non-standard options:
+
+*   `<C-x>` can be used to enter a non-standard split pattern
+
+*   `<Enter>` can be used to cycle through the options for where linebreaks are
+    placed relative to the split pattern
+
+*   `<C-s>` can be used to toggle whether the original line breaks should be
+    retained in addition to the new ones.
+
+To perform the split and exit interactive mode you should use one of the
+keys specified by `config.interactive_options`. These are the options
+you get out of the box:
+
+*    `","`: Split on commas.
+*    `";"`: Split on semicolons.
+*    `" "`: Split on one or more whitespace characters.
+*    `"+"`: Split on `+`, `-`, `/`, and `%`, provided these are surrounded by
+    one or more whitespace characters.
+*    `"<"`: Split by `<`, `<=`, `==`, `>`, or `>=`.
+*    `"."`: Split text so that each sentence occupies a single line.
 
 ## Similar work
 
@@ -176,9 +190,3 @@ a quick example to whet your appetite:
 
 *   [TreeSJ](https://github.com/Wansmer/treesj)
 
-## Limitations
-
-You can't use new-line characters like `\r` or `\n` in your split patterns,
-e.g. as a way of adding an extra linebreak between paragraphs.
-
-## 

@@ -3,6 +3,7 @@ vim.keymap.set("n", "<leader><leader>d", function()
         "init.lua",
         "interactivity.lua",
         "config.lua",
+        "utils.lua",
         "algorithm.lua",
     }
 

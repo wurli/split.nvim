@@ -239,6 +239,7 @@ end
 ---@return string[] # Uncommented lines
 ---@return LineInfo[] # Extra information about each line
 function M.uncomment_lines(lines, range, start_line_full, opts)
+    ---@type LineInfo[]
     local lines_info = {}
     for lnum, line in ipairs(lines) do
         if lnum == 1 then
@@ -260,19 +261,22 @@ function M.uncomment_lines(lines, range, start_line_full, opts)
             lines[lnum] = uncommenter(lines[lnum])
         end
 
-        table.insert(lines_info, {
+        local info = {
             commented = line_is_commented,
             commenter = commenter,
             filetype = filetype,
             indent = line:match("^(%s+)") or "",
-            -- We want the break placement for individual lines, as in rare
-            -- cases this will depend on file type. This can vary by line,
-            -- e.g. in the case of embedded code chunks within a markdown
-            -- block.
-            break_placement = (type(opts.break_placement) == "string" and opts.break_placement)
-                or (type(opts.break_placement) == "function" and opts.break_placement(filetype, line_is_commented))
-                or "after_pattern"
-        })
+        }
+
+        -- We want the break placement for individual lines, as in rare
+        -- cases this will depend on file type. This can vary by line,
+        -- e.g. in the case of embedded code chunks within a markdown
+        -- block.
+        info.break_placement = (type(opts.break_placement) == "string" and opts.break_placement)
+            or (type(opts.break_placement) == "function" and opts.break_placement(info, opts))
+            or "after_pattern"
+
+        table.insert(lines_info, info)
     end
 
     return lines, lines_info

@@ -14,20 +14,27 @@ local config = require("split.config"):get()
 ---* <C-s> can be used to toggle whether the original line
 ---  breaks should be retained in addition to the new ones.
 ---
----To execute the split in interactive mode, use one of the alias keys
----set during configuration. E.g. by default you can use `.` to split
----lines by sentence, `;` to split lines by semicolon, etc.
+---To execute the split in interactive mode, use one of the options
+---set during configuration - see |split.config.SplitConfigInput|.
+---E.g. by default you can use `.` to split lines by sentence, `;` to split
+---lines by semicolon, etc.
 ---@brief ]]
 ---@tag split.interactivity.default_aliases
 ---@brief [[
 ---When using split.nvim in interactive mode, the default pattern aliases
 ---are as follows:
+---
 ---* `","`: Split on commas.
+---
 ---* `";"`: Split on semicolons.
+---
 ---* `" "`: Split on one or more whitespace characters.
+---
 ---* `"+"`: Split on `+`, `-`, `/`, and `%`, provided these are
 ---       surrounded by one or more whitespace characters.
----* `"<"`: Split by `<`, `<=`, `==`, `>`, or `>=`
+---
+---* `"<"`: Split by `<`, `<=`, `==`, `>`, or `>=`.
+---
 ---* `"."`: Split text so that each sentence occupies a single line.
 ---@brief ]]
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -43,7 +50,7 @@ local M = {}
 function M.get_opts_interactive(opts)
     opts = opts or config.keymap_defaults
 
-    local key_options = vim.tbl_extend("force", config.pattern_aliases, {
+    local key_options = vim.tbl_extend("force", config.interactive_options, {
         [vim.keycode("<C-x>")] = "custom_pattern",
         [vim.keycode("<CR>")] = "cycle_break_placement",
         [vim.keycode("<C-s>")] = "toggle_unsplitter"

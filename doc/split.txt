@@ -112,19 +112,26 @@ special keys are used to enter non-standard options:
 * <C-s> can be used to toggle whether the original line
   breaks should be retained in addition to the new ones.
 
-To execute the split in interactive mode, use one of the alias keys
-set during configuration. E.g. by default you can use `.` to split
-lines by sentence, `;` to split lines by semicolon, etc.
+To execute the split in interactive mode, use one of the options
+set during configuration - see |split.config.SplitConfigInput|.
+E.g. by default you can use `.` to split lines by sentence, `;` to split
+lines by semicolon, etc.
 
                                            *split.interactivity.default_aliases*
 When using split.nvim in interactive mode, the default pattern aliases
 are as follows:
+
 * `","`: Split on commas.
+
 * `";"`: Split on semicolons.
+
 * `" "`: Split on one or more whitespace characters.
+
 * `"+"`: Split on `+`, `-`, `/`, and `%`, provided these are
        surrounded by one or more whitespace characters.
-* `"<"`: Split by `<`, `<=`, `==`, `>`, or `>=`
+
+* `"<"`: Split by `<`, `<=`, `==`, `>`, or `>=`.
+
 * `"."`: Split text so that each sentence occupies a single line.
 
 ==============================================================================
@@ -136,7 +143,7 @@ SplitConfigInput                                 *split.config.SplitConfigInput*
         {keymaps?} (table<string,SplitOpts>)
             A table of keymappings. Table keys should give a keymapping to set,
             table values should be a subset of |split.config.SplitOpts|.
-        {pattern_aliases?} (table<string,string|SplitOpts>)
+        {interactive_options?} (table<string,string|SplitOpts>)
             A table of aliases to use in interactive mode. Table keys give the
             alias, which should be a single character, and table values give
             the pattern to use when that character is entered by the user.
@@ -155,13 +162,12 @@ SplitOpts                                               *split.config.SplitOpts*
             The lua pattern to split on. Defaults to `","`. Multiple patterns
             can also be provided in a table if a single string doesn't give
             enough flexibility.
-        {break_placement?} (BreakPlacement|fun(ft:string,cmt:boolean):BreakPlacement)
-            Where to place the linebreak in relation to the separator. By
-            default the linebreak will be inserted after the separator, i.e.
-            split pattern. For fine-grained control you can pass a function
-            which accepts `ft`, the filetype of the line being split, and
-            `cmt`, whether the line being split is a comment. This function
-            should return one of the options given by |split.config.BreakPlacement|.
+        {break_placement?} (BreakPlacement|fun(line_info:LineInfo,opts:SplitOpts):BreakPlacement)
+            Where to place the linebreak in relation to the split pattern. By
+            default the linebreak will be inserted after the pattern. For
+            fine-grained control you can pass a function which
+            accepts |split.algorithm.LineInfo| and |split.config.SplitOpts|.
+            This function should return one of |split.config.BreakPlacement|.
         {operator_pending?} (boolean)
             Whether to enter operator-pending mode when the mapping is called
         {transform_separators?} (fun(x:string,opts:SplitOpts,info:LineInfo):string)
@@ -176,18 +182,19 @@ SplitOpts                                               *split.config.SplitOpts*
             transformed, the configuration for the current keymapping
             (see |split.config.SplitOpts|), and information about the current
             line (see |split.algorithm.LineInfo|)
-        {indenter?} (fun(range:integer[]))
+        {indenter?} ("equalprg"|"lsp"|"none"|fun(range:integer[]))
             The type of indentation to apply. This can be one of the following
             options:
-             - `"equalprg"` to use the same indentation as <=>
+             - `"equalprg"` to use the same indentation as <=>. This is the
+               default option.
              - `"lsp"` to use your LSP server's indentation, if applicable
                (note that some LSP servers will indent the whole file if this
                option is set)
              - A function that will be passed the range over which to apply the
                indentation. This range will be in the form
                `{start_row, start_col, end_row, end_col}`. Rows/cols are
-               (1, 0)-indexed
-             - `nil` to not apply indentation.
+               (1, 0)-indexed.
+             - `"none"` to not apply indentation.
         {unsplitter?} (string|nil)
             A string that can be used to collapse lines into a single string
             before splitting. This can be helpful, e.g. if you want to
@@ -260,7 +267,7 @@ The following gives the full default configuration for `split.nvim`:
                 interactive = true,
             },
         },
-        pattern_aliases = {
+        interactive_options = {
             [","] = ",",
             [";"] = ";",
             [" "] = "%s+",
@@ -290,7 +297,7 @@ The following gives the full default configuration for `split.nvim`:
                 trim_r = { "before_pattern", "on_pattern", "after_pattern" },
                 pad_r = { "before_pattern" }
             }),
-            indenter = require("split.indent").indent_equalprg,
+            indenter = "equalprg",
             unsplitter = nil,
             interactive = false,
             smart_ignore = "comments",
@@ -306,7 +313,7 @@ SplitConfig                                           *split.config.SplitConfig*
 
     Fields: ~
         {keymaps} (table<string,SplitOpts>)
-        {pattern_aliases} (table<string,string|SplitOpts>)
+        {interactive_options} (table<string,string|SplitOpts>)
         {keymap_defaults} (SplitOpts)
 
 
