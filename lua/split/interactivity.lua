@@ -57,12 +57,12 @@ function M.get_opts_interactive(opts)
     })
 
     local prompt = function(parts)
-        local out = M.user_input_char(
+        local res, char = M.user_input_char(
             vim.iter(parts):flatten():totable(),
             key_options
         )
-        if out == "cancel" then return end
-        return out
+        if res == "escape" then return end
+        return res, char
     end
 
     local prompt_parts = {
@@ -73,10 +73,12 @@ function M.get_opts_interactive(opts)
         { { "", "Normal" } },
         -- Placeholder for unsplitter text
         { { "", "Normal" } },
-        { { ": ", "Normal" } }
+        { { ": ", "Normal" } },
+        -- Selected shortcut
+        { { "", "Normal" } },
     }
 
-    local selection = prompt(prompt_parts)
+    local selection, key = prompt(prompt_parts)
 
     local break_placement_opts = {
         after_pattern  = "before_pattern",
@@ -104,10 +106,12 @@ function M.get_opts_interactive(opts)
                 { ('break_placement="%s"'):format(opts2.break_placement), "Normal" },
                 { "]", "TabLine" },
             }
-            selection = prompt(prompt_parts)
+            selection, key = prompt(prompt_parts)
 
         elseif selection == "custom_pattern" then
-            opts2.pattern = M.user_input_text("Enter split pattern: ")
+            local pattern = M.user_input_text("Enter split pattern: ")
+            opts2.pattern = pattern
+            key = pattern
             break
 
         elseif selection == "toggle_unsplitter" then
@@ -127,7 +131,7 @@ function M.get_opts_interactive(opts)
                     { "]", "TabLine" },
                 }
             end
-            selection = prompt(prompt_parts)
+            selection, key = prompt(prompt_parts)
 
         elseif type(selection) == "string" then
             opts2.pattern = selection
@@ -144,6 +148,15 @@ function M.get_opts_interactive(opts)
 
     if not selection then
         return nil
+    end
+
+    if key and type(key) == "string" then
+        prompt_parts[6] = { {
+            ('"%s"'):format(key),
+            "Normal"
+        } }
+
+        vim.api.nvim_echo(vim.iter(prompt_parts):flatten(1):totable(), false, {})
     end
 
     opts2 = vim.tbl_deep_extend("keep", opts2, opts)
@@ -227,8 +240,10 @@ end
 ---@param expected table Allows the user to specify special keys and their 
 ---  meanings, e.g. passing `{ ["a"] = "foo", [vim.keycode("<BS>")] = "bar" }`
 ---  would result in only `"a"` and `"<BS>"` being valid input characters.
----@return string | nil # One of the values from `table`, or `nil` if the user 
+---@return any # One of the values from `table`, or `nil` if the user 
 ---  cancels the operation.
+---@return string | nil # The actual key that was entered, or `nil` if the
+---  user cancels the operation.
 function M.user_input_char(prompt, expected)
     local placeholder    = { "_", "Question" }
     local escape_keycode = "\27"
@@ -248,7 +263,7 @@ function M.user_input_char(prompt, expected)
 
     while success and not expected[char] do
         if char == escape_keycode then
-            return nil
+            return nil, escape_keycode
         end
         vim.cmd([[redraw]])
         echo(utils.tbl_concat(prompt, { invalid(char), placeholder }))
@@ -257,10 +272,10 @@ function M.user_input_char(prompt, expected)
 
     if not success then
         vim.cmd([[echo '' | redraw]])
-        return nil
+        return nil, nil
     end
 
-    return expected[char]
+    return expected[char], char
 end
 
 return M
