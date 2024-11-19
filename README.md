@@ -5,7 +5,7 @@
 
 split.nvim is a plugin which adds linebreaks to your code based on one or more
 Lua patterns. Patterns may be simple like `","` to split text by commas, or
-more complicated like `"[%.?!]%s+"` to split text so each sentence ends up on
+more complex like `"[%.?!]%s+"` to split text so each sentence ends up on
 its own line.
 
 ### Features:
