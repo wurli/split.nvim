@@ -15,7 +15,7 @@ jobs:
       - name: Generating help
         run: |
           curl -Lq https://github.com/numToStr/lemmy-help/releases/latest/download/lemmy-help-x86_64-unknown-linux-gnu.tar.gz | tar xz
-          ./lemmy-help -fact --layout mini:4 lua/split/{init.lua, interactivity.lua, config.lua, utils.lua, algorithm.lua,} > doc/${{env.PLUGIN_NAME}}.txt
+          ./lemmy-help -fact --layout mini:4 lua/split/{init.lua,interactivity.lua,config.lua,utils.lua,algorithm.lua} > doc/${{env.PLUGIN_NAME}}.txt
 
       - name: Commit
         uses: stefanzweifel/git-auto-commit-action@v4
