@@ -27,7 +27,7 @@ its own line.
 
 *   **Operator-pending mode and dot-repeat**.
 
-*   An [**interactive mode**](#-Interactive-mode) so you don't need to set a
+*   An [**interactive mode**](#interactive-mode) so you don't need to set a
     million keymaps to get fine-grained control.
 
 These features all combine to give a simple, powerful tool which integrates
