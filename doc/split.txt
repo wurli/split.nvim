@@ -273,7 +273,7 @@ The following gives the full default configuration for `split.nvim`:
             [" "] = "%s+",
             ["+"] = " [+-/%] ",
             ["<"] = {
-                pattern = { "<[^=]", "<=", "==", ">[^=]", ">=" },
+                pattern = "[<>=]=?",,
                 break_placement = "before_pattern"
             },
             ["."] = {
