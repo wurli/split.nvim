@@ -132,8 +132,8 @@ a quick example to whet your appetite:
         --
         --     -- After splitting
         --     select foo
-        --     , bar
-        --     , baz
+        --         , bar
+        --         , baz
         --     from table
         break_placement = function(line_info, opts)
             if line_info.filetype == "sql" and not line_info.comment then
