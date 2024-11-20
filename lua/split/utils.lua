@@ -144,6 +144,7 @@ function M.gfind(x, pattern, plain)
                 table.insert(out, pos)
             end
         end
+        table.sort(out, function(a, b) return a[1] < b[1] end)
         return out
     end
 
