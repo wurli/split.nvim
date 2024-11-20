@@ -145,6 +145,23 @@ a quick example to whet your appetite:
 }
 ```
 
+## A note about usage
+
+split.nvim differs from most other plugins in that it is designed to be
+primarily used in _operator-pending_ mode. E.g. if your mappings are `gs`/`gss`
+and you want to split arguments within some code like `do_stuff(a = 1, b = 2, c
+= 3)`, you can first hit `gs` to enter operator-pending mode, then the
+text-object `ib` (think 'in braces') to apply the split within the pair of
+parentheses `()`. This is particularly handy because this will work even if
+your cursor is before the parentheses themselves! ✨
+
+You can also use `gss` to split an entire line, but since split.nvim will
+by default not insert linebreaks within parentheses or quotes which lie within
+the selected text, this will not do the same thing as `gsib`.
+
+To learn more about operator-pending mode, see `:help operator-pending` and
+`:help text-objects`.
+
 ## Interactive mode
 
 When split.nvim is called in interactive mode, the user will be prompted to
