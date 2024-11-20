@@ -147,7 +147,7 @@ a quick example to whet your appetite:
 
 ## A note about usage
 
-split.nvim differs from most other plugins in that it is designed to be
+split.nvim differs from many similar plugins in that it is designed to be
 primarily used in _operator-pending_ mode. E.g. if your mappings are `gs`/`gss`
 and you want to split arguments within some code like `do_stuff(a = 1, b = 2, c
 = 3)`, you can first hit `gs` to enter operator-pending mode, then the
