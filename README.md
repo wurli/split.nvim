@@ -178,14 +178,16 @@ you get out of the box:
 
 ## Similar work
 
-There are a few other plugins that offer similar functionality, although the
-implementations are very different. From what I can tell, split.nvim is unique
-in allowing you to specify generic _patterns_ to split on rather than text
-objects for a given language.
+There are a few other plugins that offer similar functionality. A detailed
+comparison to each of these is on my to-do list 😀
+
+*   [mini.splijoin](https://github.com/echasnovski/mini.nvim/blob/main/readmes/mini-splitjoin.md)
 
 *   [splitjoin.nvim](https://github.com/bennypowers/splitjoin.nvim)
 
 *   [splitjoin.vim](https://github.com/AndrewRadev/splitjoin.vim)
 
 *   [TreeSJ](https://github.com/Wansmer/treesj)
+
+*   [Vim-ArgWrap](https://git.foosoft.net/alex/vim-argwrap)
 
