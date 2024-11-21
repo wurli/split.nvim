@@ -1,7 +1,5 @@
 local M = {}
 
-local dbg = require("split.utils").debug
-
 -- Theoretically does the same thing as running `=` between marks m1 and m2.
 function M.equalprg(range)
     -- NB in theory this whole function could be as simple as just executing
