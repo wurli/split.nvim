@@ -199,7 +199,7 @@ function M.set_range_text(range, lines, linewise)
     vim.api.nvim_buf_set_mark(0, "[", range[1], 0, {})
     vim.api.nvim_buf_set_mark(0, "]", range[3], 0, {})
 
-    return { range[1], 0, range[3], 0 }
+    return range
 end
 
 ---@private

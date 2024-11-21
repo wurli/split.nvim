@@ -1,5 +1,7 @@
 local M = {}
 
+local dbg = require("split.utils").debug
+
 -- Theoretically does the same thing as running `=` between marks m1 and m2.
 function M.equalprg(range)
     -- NB in theory this whole function could be as simple as just executing
@@ -16,18 +18,30 @@ function M.equalprg(range)
     local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, true)
 
     for lnum, line in ipairs(lines) do
-        vim.v.lnum = lnum + start_line - 1
+        local lnum_abs = lnum + start_line - 1
+
+        -- indentexpr needs both the cursor and v:lnum to be set
+        vim.v.lnum = lnum_abs
+        vim.api.nvim_win_set_cursor(0, { lnum_abs, 0 })
+
         local indent = tonumber(vim.fn.execute("echo " .. indentexpr))
 
         if line:match("^%s*$") then
             lines[lnum] = ""
-        -- indent = -1 means 'keep the current indent'
+        -- indent = -1 means 'keep the current indent'; see :help indentexpr
         elseif indent and indent ~= -1 then
             lines[lnum] = string.rep(" ", indent) .. line:gsub("^%s+", "")
         end
+
+        -- Annoyingly, we need to incrementally insert the indented lines
+        -- since indentexpr() needs line n to have the correct indentation
+        -- in order to calculate the correct indentation for line n + 1 >:(
+        vim.api.nvim_buf_set_lines(0, lnum_abs - 1, lnum_abs, true, { lines[lnum] })
     end
 
-    vim.api.nvim_buf_set_lines(0, start_line - 1, end_line, true, lines)
+    -- Since we've been moving the cursor around we now need to put it back
+    -- at the start.
+    vim.api.nvim_win_set_cursor(0, { range[1], range[2] })
 end
 
 
