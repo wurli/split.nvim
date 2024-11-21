@@ -11,8 +11,8 @@ function M.get_commentstring(ref_position)
     local buf_cs = vim.bo.commentstring
     local buf_ft = vim.bo.filetype
 
-    local ts_parser = vim.treesitter.get_parser(0, '', { error = false })
-    if not ts_parser then
+    local ok, ts_parser = pcall(vim.treesitter.get_parser, 0, '')
+    if not ok or not ts_parser then
         return buf_cs, buf_ft
     end
 
@@ -176,6 +176,17 @@ end
 
 ---@return boolean | nil
 function M.ts_is_comment(bufnr, row, col)
+    local ok, node = pcall(vim.treesitter.get_node, {
+        bufnr = bufnr,
+        pos = { row - 1, col - 1 },
+        ignore_injections = false
+    })
+
+    if not ok or not node then
+        return nil
+    end
+
+
     local comment_nodes = {
         -- Some TS parsers call comment nodes 'comment', others use names
         -- like 'line_comment', 'block_comment', etc.
@@ -183,12 +194,6 @@ function M.ts_is_comment(bufnr, row, col)
         -- SQL block comments
         "^marginalia$"
     }
-
-    local node = vim.treesitter.get_node({
-        bufnr = bufnr,
-        pos = { row - 1, col - 1 },
-        ignore_injections = false
-    })
 
     local parents_checked = 0
 

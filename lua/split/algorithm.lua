@@ -143,7 +143,7 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     -----------------------
     -- Perform the split --
     -----------------------
-    local lines_split = M.split_lines(lines_uncommented, opts, range and range[1])
+    local lines_split = M.split_lines(lines_uncommented, opts, lines_info, range and range[1])
 
     -----------------------------------------------
     -- Apply any transformations to split pieces --
@@ -288,6 +288,7 @@ end
 ---@param lines string[] An array of lines to split
 ---@param opts SplitOpts Additional options to use when performting the
 ---  split. See |split.config.SplitOpts| for more information.
+---@param info LineInfo[] Information about the lines being split
 ---@param linenr? integer Optionally the start line number, 1-indexed. If
 ---  supplied, this is used with tree-sitter to detect which of the
 ---  matches for `pattern` are commented. If not supplied it is assumed
@@ -296,7 +297,7 @@ end
 ---  used with tree-sitter to detect which of the matches for `pattern`
 ---  are commented. Defaults to the current buffer.
 ---@return SegSepPair[][]
-function M.split_lines(lines, opts, linenr, bufnr)
+function M.split_lines(lines, opts, info, linenr, bufnr)
     linenr  = linenr or 1
     bufnr   = bufnr or 0
 
@@ -327,8 +328,9 @@ function M.split_lines(lines, opts, linenr, bufnr)
         if not linenr then
             return false
         end
-        return comment.ts_is_comment(bufnr, linenr + split_pos[1][1], split_pos[1][2]) or
-            comment.ts_is_comment(bufnr, linenr + split_pos[2][1], split_pos[2][2])
+        local start_commented = comment.ts_is_comment(bufnr, linenr + split_pos[1][1], split_pos[1][2])
+        local end_commented = comment.ts_is_comment(bufnr, linenr + split_pos[2][1], split_pos[2][2])
+        return start_commented or end_commented or info[split_pos[1][1]].commented or false
     end
 
     -- Ignore any separators which fall within brackets, quotes, etc

@@ -12,9 +12,8 @@ function M.equalprg(range)
         return
     end
 
-    local start_line = range[1]
-    local end_line   = range[3]
-    local lines      = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, true)
+    local start_line, end_line = range[1], range[3]
+    local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, true)
 
     for lnum, line in ipairs(lines) do
         vim.v.lnum = lnum + start_line - 1
