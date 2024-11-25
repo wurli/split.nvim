@@ -74,9 +74,10 @@ end
 ---@param line string
 ---@return { left: string, indent: string, right: string }
 function M.get_comment_parts(commentstring, line)
-    if commentstring == nil or commentstring == '' then
-        vim.api.nvim_echo({ { "Option 'commentstring' is empty.", 'WarningMsg' } }, true, {})
-        return { left = '', right = '' }
+    if commentstring == nil or commentstring == "" then
+        -- Probably a warning isn't necessary here...
+        -- vim.api.nvim_echo({ { "Option 'commentstring' is empty.", 'WarningMsg' } }, true, {})
+        return { left = "", indent = "", right = "" }
     end
 
     if not (type(commentstring) == 'string' and commentstring:find('%%s') ~= nil) then
