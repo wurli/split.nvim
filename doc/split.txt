@@ -165,6 +165,9 @@ SplitConfigInput                                 *split.config.SplitConfigInput*
             See |split.interactivity.default_aliases| for the default aliases.
         {keymap_defaults?} (SplitOpts)
             Options to use by default when setting keymaps.
+        {set_default_mappings} (boolean)
+            You can set this option to `false` if you don't want to the default mappings
+            to be set when `require("split").setup()` is called.
 
 
 SplitOpts                                               *split.config.SplitOpts*
@@ -317,6 +320,7 @@ The following gives the full default configuration for `split.nvim`:
             quote_characters = { left = { "'", '"', "`" }, right = { "'", '"', "`" } },
             brace_characters = { left = { "(", "{", "[" }, right = { ")", "}", "]" } }
         },
+        set_default_mappings = true
     }
 <
 
@@ -328,6 +332,7 @@ SplitConfig                                           *split.config.SplitConfig*
         {keymaps} (table<string,SplitOpts>)
         {interactive_options} (table<string,string|SplitOpts>)
         {keymap_defaults} (SplitOpts)
+        {set_default_mappings} (boolean)
 
 
 Config:set({cfg})                                             *split.config:set*
