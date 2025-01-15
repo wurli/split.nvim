@@ -10,9 +10,7 @@ local utils = require("split.utils")
 ---@class SplitConfigInput
 ---
 ---A table of keymappings. Table keys should give a keymapping to set,
----table values should be a subset of |split.config.SplitOpts|. Note that
----when this field is passed to `setup()`, none of the default keymaps will
----be set.
+---table values should be a subset of |split.config.SplitOpts|.
 ---@field keymaps? table<string, SplitOpts>
 ---
 ---A table of aliases to use in interactive mode. Table keys give the
