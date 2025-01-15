@@ -10,7 +10,9 @@ local utils = require("split.utils")
 ---@class SplitConfigInput
 ---
 ---A table of keymappings. Table keys should give a keymapping to set,
----table values should be a subset of |split.config.SplitOpts|.
+---table values should be a subset of |split.config.SplitOpts|. Note that
+---when this field is passed to `setup()`, none of the default keymaps will
+---be set.
 ---@field keymaps? table<string, SplitOpts>
 ---
 ---A table of aliases to use in interactive mode. Table keys give the
@@ -23,6 +25,10 @@ local utils = require("split.utils")
 ---
 ---Options to use by default when setting keymaps.
 ---@field keymap_defaults? SplitOpts
+---
+---You can set this option to `false` if you don't want to the default mappings
+---to be set when `require("split").setup()` is called.
+---@field set_default_mappings boolean
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -62,13 +68,13 @@ local utils = require("split.utils")
 ---
 ---The type of indentation to apply. This can be one of the following
 ---options:
---- - `"equalprg"` to use the same indentation as <=>. This is the 
+--- - `"equalprg"` to use the same indentation as <=>. This is the
 ---   default option.
 --- - `"lsp"` to use your LSP server's indentation, if applicable
 ---   (note that some LSP servers will indent the whole file if this
 ---   option is set)
 --- - A function that will be passed the range over which to apply the
----   indentation. This range will be in the form 
+---   indentation. This range will be in the form
 ---   `{start_row, start_col, end_row, end_col}`. Rows/cols are
 ---   (1, 0)-indexed.
 --- - `"none"` to not apply indentation.
@@ -193,6 +199,7 @@ local utils = require("split.utils")
 ---            quote_characters = { left = { "'", '"', "`" }, right = { "'", '"', "`" } },
 ---            brace_characters = { left = { "(", "{", "[" }, right = { ")", "}", "]" } }
 ---        },
+---        set_default_mappings = true
 ---    }
 ---<
 ---
@@ -207,7 +214,9 @@ local utils = require("split.utils")
 ---@field keymaps table<string, SplitOpts>
 ---@field interactive_options table<string, string | SplitOpts>
 ---@field keymap_defaults SplitOpts
+---@field set_default_mappings boolean
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 local Config = {
     state = {},
     ---@type SplitConfig
@@ -271,12 +280,14 @@ local Config = {
             quote_characters = { left = { "'", '"', "`" }, right = { "'", '"', "`" } },
             brace_characters = { left = { "(", "{", "[" }, right = { ")", "}", "]" } }
         },
+        set_default_mappings = true
     },
 }
 
 ---@param cfg SplitConfigInput
 function Config:set(cfg)
     if cfg then
+        if cfg.set_default_mappings == false then self.config.keymaps = {} end
         self.config = vim.tbl_deep_extend("force", self.config, cfg)
 
         for key, opts in pairs(self.config.keymaps) do
