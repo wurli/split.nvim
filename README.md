@@ -142,6 +142,9 @@ a quick example to whet your appetite:
             return "after_pattern"
         end
     },
+    -- If you don't want to include the default keymaps you can set this
+    -- to `false`
+    set_default_mappings = true
 }
 ```
 
