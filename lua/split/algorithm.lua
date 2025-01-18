@@ -1,6 +1,7 @@
 local utils         = require("split.utils")
 local interactivity = require("split.interactivity")
 local comment       = require("split.comment")
+local iter          = vim.iter or require("split.compat_iter")
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@mod split.algorithm Algorithm
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -94,7 +95,7 @@ function M.split_in_buffer(how, opts)
     ---------------------------------------
     -- Insert the new text in the buffer --
     ---------------------------------------
-    local lines_flat = vim.iter(new_lines):flatten(1):totable()
+    local lines_flat = iter(new_lines):flatten(1):totable()
     local new_range = utils.set_range_text(range, lines_flat, linewise)
 
     -----------------------
@@ -121,7 +122,7 @@ end
 ---@param range? integer[] The range over which the text is being split. Used
 ---  with treesitter to determine which portions are commented.
 ---@param linewise? boolean Whether the text is being split in line mode.
----@param opts SplitOpts | nil 
+---@param opts SplitOpts | nil
 ---Additional options; see |split.config.SplitOpts| for more
 ---information.
 ---@return string[][] # A table where each element corresponds to one of
@@ -306,7 +307,7 @@ function M.split_lines(lines, opts, info, linenr, bufnr)
         lines
     )
 
-    local any_matches = vim.iter(sep_positions):any(function(x) return #x > 0 end)
+    local any_matches = iter(sep_positions):any(function(x) return #x > 0 end)
 
     if not any_matches then
         return vim.tbl_map(function(l) return { { seg = l } } end, lines)
@@ -316,7 +317,7 @@ function M.split_lines(lines, opts, info, linenr, bufnr)
 
     local is_in_braces = function(split_pos)
         for _, chunk in pairs(unsplittable_chunks) do
-            -- Check if either the start or end of the separator falls within 
+            -- Check if either the start or end of the separator falls within
             -- a pair of brackets (or quotes)
             if utils.position_within(split_pos[1], chunk[1], chunk[2]) then return true end
             if utils.position_within(split_pos[2], chunk[1], chunk[2]) then return true end
@@ -343,7 +344,7 @@ function M.split_lines(lines, opts, info, linenr, bufnr)
     --      -- they're commented
     --      { { 6, 7, false } },
     -- }
-    sep_positions = vim.iter(sep_positions):
+    sep_positions = iter(sep_positions):
         enumerate():
         map(function(lnum, cnums)
             local out = {}
@@ -357,8 +358,8 @@ function M.split_lines(lines, opts, info, linenr, bufnr)
         end):
         totable()
 
-    local comments_found = vim.iter(sep_positions):flatten(1):any(function(x) return x[3] end)
-    local code_found     = vim.iter(sep_positions):flatten(1):any(function(x) return not x[3] end)
+    local comments_found = iter(sep_positions):flatten(1):any(function(x) return x[3] end)
+    local code_found     = iter(sep_positions):flatten(1):any(function(x) return not x[3] end)
 
     -- Discard separators based on 'smart_ignore'
     if comments_found and code_found and opts.smart_ignore ~= "none" then
@@ -520,9 +521,9 @@ function M.unsplit_lines(lines_recombined, lines_info, opts)
     -- user always wants the unsplitter to take precedence, i.e. they want the
     -- line to get unsplit, but not re-split again afterwards.
     local pattern        = type(opts.pattern) == "table" and opts.pattern or { opts.pattern }
-    local always_unsplit = vim.iter(pattern):any(function(p) return opts.unsplitter:match(p) end)
-    local comments_found = vim.iter(lines_info):any(function(x) return x.commented end)
-    local code_found     = vim.iter(lines_info):any(function(x) return not x.commented end)
+    local always_unsplit = iter(pattern):any(function(p) return opts.unsplitter:match(p) end)
+    local comments_found = iter(lines_info):any(function(x) return x.commented end)
+    local code_found     = iter(lines_info):any(function(x) return not x.commented end)
 
     -- Collapse each chunk of commented/uncommented lines into single lines.
     local prev_line_commented = lines_info[1].commented
@@ -606,7 +607,7 @@ end
 
 
 ---@private
----@param lines table A table of lines 
+---@param lines table A table of lines
 ---@param left_braces table Left brace characters
 ---@param right_braces table Right brace characters
 ---@param ignore_ranges? table Ranges to ignore when looking for brace characters

@@ -1,5 +1,6 @@
 -- Inspired by the Neovim implementation of `gc`.
--- See https://github.com/neovim/neovim/blob/master/runtime/lua/vim/_comment.lua
+-- See https://github.com/neovim/neovim/blob/master/runtime/lua/vim/_comment.luaa
+local iter = vim.iter or require("split.compat_iter")
 
 local M = {}
 
@@ -43,7 +44,7 @@ function M.get_commentstring(ref_position)
         -- so we've gotta do this additional check. Note: Neovim's `gc`
         -- doesn't seem to have this check or the problems associated with
         -- not having it. No idea how it avoids them though.
-        local includes_range = vim.iter(regions):flatten(1):find(function(r)
+        local includes_range = iter(regions):flatten(1):find(function(r)
             local start_ok = r[1] < ref_range[1] or r[1] == ref_range[1] and r[2] <= ref_range[2]
             local end_ok   = ref_range[3] < r[4] or ref_range[3] == r[4] and ref_range[4] <= r[5]
             return start_ok and end_ok

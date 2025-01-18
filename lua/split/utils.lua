@@ -1,5 +1,6 @@
+local iter = vim.iter or require("split.compat_iter")
 local M = {}
---
+
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@mod split.utils Utilities
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -9,7 +10,7 @@ local M = {}
 ---Usually the transformations you'll want to apply will involve adding or
 ---removing leading/trailing whitespace, depending on where the linebreak sits
 ---in relation to split pattern. This helper makes it easy to create such
----functions. 
+---functions.
 ---
 ---@param tb { trim_l: BreakPlacement[], trim_r: BreakPlacement[], pad_l: BreakPlacement[], pad_r: BreakPlacement[] }
 ---@usage [[
@@ -20,7 +21,7 @@ local M = {}
 ---            trim_l = { "before_pattern", "on_pattern", "after_pattern" },
 ---            trim_r = { "before_pattern", "on_pattern", "after_pattern" },
 ---        }),
----        -- - Remove leading whitespace if the linebreak comes before the 
+---        -- - Remove leading whitespace if the linebreak comes before the
 ---        --   split pattern
 ---        -- - Always remove trailing whitespace
 ---        -- - Add leading whitespace if the linebreak comes before the
@@ -135,7 +136,7 @@ end
 ---@param x string The string to split
 ---@param pattern string | table Either a pattern to split on or a table of
 ---  patterns to split on
----@param plain? boolean Whether to 
+---@param plain? boolean Whether to
 function M.gfind(x, pattern, plain)
     if type(pattern) == "table" then
         local out = {}
@@ -190,7 +191,7 @@ function M.set_range_text(range, lines, linewise)
     end
 
     -- Need to adjust the positions for the new marks based on how many new
-    -- lines have been inserted. Unfortuntely, because we run `=` later to 
+    -- lines have been inserted. Unfortuntely, because we run `=` later to
     -- reindent the code, it's highly impractical to work out where the final
     -- column should be, so we just set it to 0.
     range[1] = range[1] + 1 -- (lines[1] == "" and 2 or 1)
@@ -204,7 +205,7 @@ end
 
 ---@private
 function M.tbl_concat(...)
-    return vim.iter({...}):flatten():totable()
+    return iter({...}):flatten():totable()
 end
 
 ---@private
