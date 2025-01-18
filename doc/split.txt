@@ -351,7 +351,7 @@ M.make_transformer({tb})                          *split.utils.make_transformer*
     Usually the transformations you'll want to apply will involve adding or
     removing leading/trailing whitespace, depending on where the linebreak sits
     in relation to split pattern. This helper makes it easy to create such
-    functions. 
+    functions.
 
 
     Parameters: ~
@@ -366,7 +366,7 @@ M.make_transformer({tb})                          *split.utils.make_transformer*
                     trim_l = { "before_pattern", "on_pattern", "after_pattern" },
                     trim_r = { "before_pattern", "on_pattern", "after_pattern" },
                 }),
-                -- - Remove leading whitespace if the linebreak comes before the 
+                -- - Remove leading whitespace if the linebreak comes before the
                 --   split pattern
                 -- - Always remove trailing whitespace
                 -- - Add leading whitespace if the linebreak comes before the
@@ -430,8 +430,7 @@ M.split({lines}, {start_line_full?}, {end_line_full?}, {range?}, {linewise?}, {o
         {range?} (integer[]) The range over which the text is being split. Used
               with treesitter to determine which portions are commented.
         {linewise?} (boolean) Whether the text is being split in line mode.
-        {opts} (SplitOpts|nil)
-            Additional options; see |split.config.SplitOpts| for more
+        {opts} (SplitOpts|nil) Additional options; see |split.config.SplitOpts| for more
             information.
 
     Returns: ~
