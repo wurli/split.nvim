@@ -1,5 +1,6 @@
 local utils = require("split.utils")
 local config = require("split.config"):get()
+local iter = vim.iter or require("split.compat_iter")
 
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@mod split.interactivity Interactivity
@@ -58,7 +59,7 @@ function M.get_opts_interactive(opts)
 
     local prompt = function(parts)
         local res, char = M.user_input_char(
-            vim.iter(parts):flatten():totable(),
+            iter(parts):flatten():totable(),
             key_options
         )
         if res == "escape" then return end
@@ -156,7 +157,7 @@ function M.get_opts_interactive(opts)
             "Normal"
         } }
 
-        vim.api.nvim_echo(vim.iter(prompt_parts):flatten(1):totable(), false, {})
+        vim.api.nvim_echo(iter(prompt_parts):flatten(1):totable(), false, {})
     end
 
     opts2 = vim.tbl_deep_extend("keep", opts2, opts)
@@ -171,14 +172,14 @@ M.namespace = {
 ---@private
 ---Prompt for user input
 ---
----This function ended up more feature-rich than it needs to be, but I'm not 
+---This function ended up more feature-rich than it needs to be, but I'm not
 ---going to change it because I might need those features again one day.
 ---
 ---@param prompt string The prompt to show the user
 ---@param placeholder string? Placeholder text
 ---@param special_keys table? A table of special keys which can be used to
 ---  exit the user input. E.g. `special_keys={ ["foofy"] = "<C-x>" }` will
----  result in the function returning `"foofy"` if the user presses `<C-x>` 
+---  result in the function returning `"foofy"` if the user presses `<C-x>`
 ---  at any point while the dialogue is shown. `"escape"` is always included.
 ---
 ---@return string value Will either be the text entered by the user or the name
@@ -195,7 +196,7 @@ function M.user_input_text(prompt, placeholder, special_keys)
         special_keys[k] = vim.keycode(v)
     end
 
-    -- While the user is entering text, on each keystroke we want to check 
+    -- While the user is entering text, on each keystroke we want to check
     -- whether they've input one of the special characters. If so, we need
     -- to exit the user input.
     on_key(
@@ -216,7 +217,7 @@ function M.user_input_text(prompt, placeholder, special_keys)
 
     vim.cmd('echohl Question')
 
-    -- pcall used because vim.fn.input() might fail, e.g. if the user hits 
+    -- pcall used because vim.fn.input() might fail, e.g. if the user hits
     -- <C-c>. In such cases, we treat it as if they hit <Esc>.
     local input_obtained, input = pcall(vim.fn.input, {
         prompt = prompt,
@@ -237,10 +238,10 @@ end
 
 ---@private
 ---@param prompt table The prompt to show ahead of the input.
----@param expected table Allows the user to specify special keys and their 
+---@param expected table Allows the user to specify special keys and their
 ---  meanings, e.g. passing `{ ["a"] = "foo", [vim.keycode("<BS>")] = "bar" }`
 ---  would result in only `"a"` and `"<BS>"` being valid input characters.
----@return any # One of the values from `table`, or `nil` if the user 
+---@return any # One of the values from `table`, or `nil` if the user
 ---  cancels the operation.
 ---@return string | nil # The actual key that was entered, or `nil` if the
 ---  user cancels the operation.
