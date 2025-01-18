@@ -1,7 +1,9 @@
 local utils = require("split.utils")
 local config = require("split.config"):get()
 local iter = vim.iter or require("split.compat_iter")
-local keycode = vim.keycode or (function(str) return vim.api.nvim_replace_termcodes(str, true, true, true) end)
+local keycode = vim.keycode or function(str)
+    return vim.api.nvim_replace_termcodes(str, true, true, true)
+end
 
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@mod split.interactivity Interactivity
