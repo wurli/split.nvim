@@ -2,6 +2,7 @@ local utils         = require("split.utils")
 local interactivity = require("split.interactivity")
 local comment       = require("split.comment")
 local iter          = vim.iter or require("split.compat_iter")
+local list_contains = vim.list_contains or vim.tbl_contains
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@mod split.algorithm Algorithm
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -631,7 +632,7 @@ function M.get_enclosed_chunks(lines, left_braces, right_braces, ignore_ranges)
         for cnum = 1, #line do
             if not is_ignored({ lnum, cnum }) then
                 local char = line:sub(cnum, cnum)
-                if vim.list_contains(left_braces, char) or vim.list_contains(right_braces, char) then
+                if list_contains(left_braces, char) or list_contains(right_braces, char) then
                     table.insert(braces, char)
                     table.insert(brace_positions, { lnum, cnum })
                 end

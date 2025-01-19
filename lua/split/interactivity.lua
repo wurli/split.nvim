@@ -1,6 +1,9 @@
 local utils = require("split.utils")
 local config = require("split.config"):get()
 local iter = vim.iter or require("split.compat_iter")
+local keycode = vim.keycode or function(str)
+    return vim.api.nvim_replace_termcodes(str, true, true, true)
+end
 
 --~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ---@mod split.interactivity Interactivity
@@ -52,9 +55,9 @@ function M.get_opts_interactive(opts)
     opts = opts or config.keymap_defaults
 
     local key_options = vim.tbl_extend("force", config.interactive_options, {
-        [vim.keycode("<C-x>")] = "custom_pattern",
-        [vim.keycode("<CR>")] = "cycle_break_placement",
-        [vim.keycode("<C-s>")] = "toggle_unsplitter"
+        [keycode("<C-x>")] = "custom_pattern",
+        [keycode("<CR>")] = "cycle_break_placement",
+        [keycode("<C-s>")] = "toggle_unsplitter"
     })
 
     local prompt = function(parts)
@@ -193,7 +196,7 @@ function M.user_input_text(prompt, placeholder, special_keys)
 
     -- Translate vim key notation to decimal keycodes, e.g. <Esc> to \27, etc
     for k, v in pairs(special_keys) do
-        special_keys[k] = vim.keycode(v)
+        special_keys[k] = keycode(v)
     end
 
     -- While the user is entering text, on each keystroke we want to check
