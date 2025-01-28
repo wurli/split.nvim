@@ -164,7 +164,7 @@ local utils = require("split.utils")
 ---            [","] = ",",
 ---            [";"] = ";",
 ---            [" "] = "%s+",
----            ["+"] = " [+-/%] ",
+---            ["+"] = " [+-/%%] ",
 ---            ["<"] = {
 ---                pattern = "[<>=]=?",,
 ---                break_placement = "before_pattern"
@@ -245,7 +245,7 @@ local Config = {
             [","] = ",",
             [";"] = ";",
             [" "] = "%s+",
-            ["+"] = " [+-/%] ",
+            ["+"] = " [+-/%%] ",
             ["<"] = {
                 pattern = "[<>=]=?",
                 break_placement = "before_pattern"
