@@ -104,9 +104,9 @@ function M.split_in_buffer(how, opts)
     -----------------------
     if type(opts.indenter) == "string" then
         local indenter = require("split.indent")[opts.indenter]
-        if indenter then indenter(new_range) end
+        if indenter then indenter(new_range, linewise) end
     elseif type(opts.indenter) == "function" then
-        opts.indenter(new_range)
+        opts.indenter(new_range, linewise)
     end
 end
 
@@ -134,8 +134,8 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     end_line_full               = end_line_full or lines[#lines]
     local start_line_is_partial = #start_line_full ~= #lines[1]
     local end_line_is_partial   = #end_line_full   ~= #lines[#lines]
-    if linewise == nil then linewise = true else linewise = false end
     opts                        = utils.tbl_copy(opts)
+    if linewise == nil then linewise = true end
 
     --------------------------------------------------------------------------
     -- Uncomment any commented lines, and make functions to re-comment them --
@@ -171,23 +171,44 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
         lines_unsplit, lines_info = M.unsplit_lines(lines_recombined, lines_info, opts)
     end
 
-    --------------
-    -- Reindent --
-    --------------
-    local lines_reindented = utils.tbl_copy(lines_unsplit)
-    for lnum, line in ipairs(lines_unsplit) do
-        local info = lines_info[lnum]
-        if not info.commented then
-            lines_reindented[lnum][1] = info.indent .. line[1]
+    ---------------------------
+    -- Apply relative indent --
+    ---------------------------
+    lines_info = vim.tbl_map(
+        function(i)
+            i.relative_indent = utils.get_filetype_indent(i.filetype)
+            return i
+        end,
+        lines_info
+    )
+
+    local lines_relative_indented = lines_unsplit
+    if not linewise then
+        for lnum, _ in ipairs(lines_unsplit) do
+            lines_relative_indented[lnum] = vim.tbl_map(
+                function(part) return lines_info[lnum].relative_indent .. part end,
+                lines_relative_indented[lnum]
+            )
         end
     end
 
-    -----------------------------------
-    -- Apply commenting to new lines --
-    -----------------------------------
+    ----------------------
+    -- Apply commenting --
+    ----------------------
     local lines_recommented = {}
     for lnum, info in ipairs(lines_info) do
-        lines_recommented[lnum] = vim.tbl_map(info.commenter, lines_reindented[lnum])
+        lines_recommented[lnum] = vim.tbl_map(info.commenter, lines_relative_indented[lnum])
+    end
+
+    ---------------------------
+    -- Apply absolute indent --
+    ---------------------------
+    local lines_absolute_indented = utils.tbl_copy(lines_recommented)
+    for lnum, _ in ipairs(lines_recommented) do
+        lines_absolute_indented[lnum] = vim.tbl_map(
+            function(part) return lines_info[lnum].indent .. part end,
+            lines_absolute_indented[lnum]
+        )
     end
 
     -----------------------------------------------
@@ -195,18 +216,19 @@ function M.split(lines, start_line_full, end_line_full, range, linewise, opts)
     -----------------------------------------------
     if not linewise then
         if start_line_is_partial then
-            table.insert(lines_recommented[1], 1, "")
+            table.insert(lines_absolute_indented[1], 1, "")
         end
         local last_line = lines_recombined[#lines_recombined]
         if end_line_is_partial and last_line[#last_line] ~= "" then
+            local info = lines_info[#lines_info]
             table.insert(
-                lines_recommented[#lines_recommented],
-                lines_info[#lines_info].commenter("")
-            )
+                lines_absolute_indented[#lines_absolute_indented],
+                info.indent .. info.commenter("")
+             )
         end
     end
 
-    return lines_recommented
+    return lines_absolute_indented
 end
 
 

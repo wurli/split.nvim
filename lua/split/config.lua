@@ -66,8 +66,9 @@ local utils = require("split.utils")
 ---
 ---The type of indentation to apply. This can be one of the following
 ---options:
---- - `"equalprg"` to use the same indentation as <=>. This is the
----   default option.
+--- - `"simple"` to preserve the original indentation whilst further indenting
+---   some portions of split text by 'shiftwidth'. This is the default.
+--- - `"equalprg"` to use the same indentation as <=>.
 --- - `"lsp"` to use your LSP server's indentation, if applicable
 ---   (note that some LSP servers will indent the whole file if this
 ---   option is set)
@@ -75,8 +76,8 @@ local utils = require("split.utils")
 ---   indentation. This range will be in the form
 ---   `{start_row, start_col, end_row, end_col}`. Rows/cols are
 ---   (1, 0)-indexed.
---- - `"none"` to not apply indentation.
----@field indenter? '"equalprg"' | '"lsp"' | '"none"' | fun(range: integer[])
+---Note
+---@field indenter? '"simple"' | '"lsp"' | '"equalprg"' | fun(range: integer[])
 ---
 ---A string that can be used to collapse lines into a single string
 ---before splitting. This can be helpful, e.g. if you want to
@@ -190,7 +191,7 @@ local utils = require("split.utils")
 ---                trim_r = { "before_pattern", "on_pattern", "after_pattern" },
 ---                pad_r = { "before_pattern" }
 ---            }),
----            indenter = "equalprg",
+---            indenter = "simple",
 ---            unsplitter = nil,
 ---            interactive = false,
 ---            smart_ignore = "comments",
@@ -271,7 +272,7 @@ local Config = {
                 trim_r = { "before_pattern", "on_pattern", "after_pattern" },
                 pad_r = { "before_pattern" }
             }),
-            indenter = "equalprg",
+            indenter = "simple",
             unsplitter = nil,
             interactive = false,
             smart_ignore = "comments",

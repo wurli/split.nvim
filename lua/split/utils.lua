@@ -217,5 +217,13 @@ function M.tbl_copy(x)
     return out
 end
 
-return M
+---@private
+function M.get_filetype_indent(ft)
+    local shiftwidth = vim.filetype.get_option(ft, "shiftwidth") ---@as number
+    if shiftwidth == 0 then
+        shiftwidth = vim.filetype.get_option(ft, "tabstop") ---@as number
+    end
+    return (" "):rep(shiftwidth or 0)
+end
 
+return M
