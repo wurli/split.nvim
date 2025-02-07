@@ -10,9 +10,7 @@ its own line.
 
 ### Features:
 
-*   **Automatic indentation** applied to the split region. This is the same
-    indentation used by your normal `==`, so spacing should end up the way
-    _you_ like it.
+*   **Automatic indentation** applied to the split region.
 
 *   **Awareness of common text objects** like `()`, `{}`, `""`, etc. This means
     your code is _much_ less likely to get completely borked by the operation.
@@ -140,7 +138,10 @@ a quick example to whet your appetite:
                 return "before_pattern"
             end
             return "after_pattern"
-        end
+        end,
+        -- This applies the default indentation. You can also use "equalprg"
+        -- or "lsp" to apply more sophisticated indentation :)
+        indenter = "simple"
     },
     -- If you don't want to include the default keymaps you can set this
     -- to `false`
